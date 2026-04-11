@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# PyInstaller
+sidecar/dist/
+sidecar/build/
+
+# Tauri
+src-tauri/target/
+
+# Node
+node_modules/
+.next/
+
+# macOS
+.DS_Store
+
+# Env
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Lens runtime data (lives in ~/.claudelens/, not in repo)
+*.db
+state.json

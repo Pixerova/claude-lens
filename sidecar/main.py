@@ -1,0 +1,338 @@
+"""
+main.py — FastAPI sidecar entry point for Claude Lens.
+
+Starts on http://localhost:8765
+Exposes all M1 data endpoints consumed by the Tauri frontend.
+
+Startup sequence:
+  1. Load config
+  2. Init SQLite DB
+  3. Scan existing sessions (background thread)
+  4. Start file watchers
+  5. Start dynamic usage poller
+  6. Serve API
+"""
+
+import asyncio
+import json
+import logging
+import threading
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+
+import db
+import pricing
+from keychain import is_authenticated, get_oauth_token
+from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS
+from parser import scan_all_sessions, start_watchers
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+log = logging.getLogger(__name__)
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+CONFIG_PATH = Path.home() / ".claudelens" / "config.json"
+
+DEFAULT_CONFIG = {
+    "hotkey": "Option+Space",
+    "retentionDays": 30,
+    "poll": {
+        "thresholds": {
+            "critical": {"above": 0.90, "intervalSec": 30},
+            "high":     {"above": 0.80, "intervalSec": 60},
+            "elevated": {"above": 0.60, "intervalSec": 120},
+            "normal":   {"above": 0.20, "intervalSec": 300},
+            "low":      {"above": 0.05, "intervalSec": 1800},
+            "minimal":  {"above": 0.00, "intervalSec": 3600},
+        }
+    },
+    "warnings": {"amberPct": 80, "redPct": 90},
+    "suggestions": {
+        "enabled": True,
+        "idleThresholdHours": 4,
+        "workingHours": {"start": "09:00", "end": "18:00"},
+    },
+    "notifications": {
+        "limitWarnings": True,
+        "dailySummary": True,
+        "dailySummaryTime": "17:00",
+    },
+}
+
+
+def load_config() -> dict:
+    if CONFIG_PATH.exists():
+        try:
+            user = json.loads(CONFIG_PATH.read_text())
+            # Shallow merge: user values override defaults
+            merged = {**DEFAULT_CONFIG, **user}
+            return merged
+        except Exception as exc:
+            log.warning("Could not load config.json (%s), using defaults", exc)
+    return DEFAULT_CONFIG
+
+
+def _build_poll_thresholds(config: dict) -> list[tuple[float, int]]:
+    """Convert config thresholds dict to the list-of-tuples format poller expects."""
+    raw = config.get("poll", {}).get("thresholds", {})
+    pairs = [(v["above"], v["intervalSec"]) for v in raw.values()]
+    return sorted(pairs, reverse=True) if pairs else DEFAULT_THRESHOLDS
+
+
+# ── App state ─────────────────────────────────────────────────────────────────
+
+_config: dict = {}
+_poller: Optional[UsagePoller] = None
+_watcher = None
+
+
+# ── Lifespan ──────────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _config, _poller, _watcher
+
+    # 1. Config
+    _config = load_config()
+    log.info("Config loaded (retentionDays=%d)", _config["retentionDays"])
+
+    # 2. Pricing overrides
+    pricing.set_pricing_override(_config.get("pricing", {}))
+
+    # 3. DB
+    db.init_db()
+    log.info("Database ready at %s", db.DB_PATH)
+
+    # 4. Retention prune
+    pruned = db.prune_old_data(_config["retentionDays"])
+    log.info("Pruned old data: %s", pruned)
+
+    # 5. Startup session scan (background — don't block server start)
+    def _scan():
+        scan_all_sessions(_config["retentionDays"])
+    threading.Thread(target=_scan, daemon=True).start()
+
+    # 6. File watchers
+    _watcher = start_watchers()
+
+    # 7. Usage poller
+    thresholds = _build_poll_thresholds(_config)
+    _poller = UsagePoller(thresholds=thresholds)
+    asyncio.create_task(_poller.run())
+
+    log.info("Claude Lens sidecar started on http://localhost:8765")
+    yield
+
+    # Shutdown
+    if _poller:
+        _poller.stop()
+    if _watcher:
+        _watcher.stop()
+        _watcher.join()
+    log.info("Claude Lens sidecar stopped")
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+
+app = FastAPI(title="Claude Lens Sidecar", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["tauri://localhost", "http://localhost:*", "http://127.0.0.1:*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── Helper: snapshot → dict ───────────────────────────────────────────────────
+
+def _snapshot_to_dict(snap, is_stale: bool = False) -> dict:
+    """Convert a DB row or UsageSnapshot to a serialisable dict."""
+    if hasattr(snap, "session_pct"):
+        # UsageSnapshot dataclass
+        return {
+            "sessionPct":      snap.session_pct,
+            "sessionResetsAt": snap.session_resets_at,
+            "weeklyPct":       snap.weekly_pct,
+            "weeklyResetsAt":  snap.weekly_resets_at,
+            "recordedAt":      snap.recorded_at,
+            "isStale":         snap.is_stale,
+        }
+    else:
+        # sqlite3.Row
+        return {
+            "sessionPct":      snap["session_pct"],
+            "sessionResetsAt": snap["session_resets"],
+            "weeklyPct":       snap["weekly_pct"],
+            "weeklyResetsAt":  snap["weekly_resets"],
+            "recordedAt":      snap["recorded_at"],
+            "isStale":         is_stale,
+        }
+
+
+def _staleness_seconds(recorded_at: str) -> int:
+    try:
+        t = datetime.fromisoformat(recorded_at.replace("Z", "+00:00"))
+        return int((datetime.now(timezone.utc) - t).total_seconds())
+    except Exception:
+        return -1
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.get("/health")
+def health():
+    """Sidecar status, last poll time, DB stats, authentication state."""
+    snap = _poller.current if _poller else None
+    stats = db.get_db_stats()
+    return {
+        "status":           "ok",
+        "authenticated":    is_authenticated(),
+        "lastPollAt":       snap.recorded_at if snap else None,
+        "pollIntervalSec":  _poller.interval_sec if _poller else None,
+        "isStale":          snap.is_stale if snap else True,
+        "stalenessSeconds": _staleness_seconds(snap.recorded_at) if snap else None,
+        "db": stats,
+    }
+
+
+@app.get("/usage/current")
+async def usage_current():
+    """
+    Latest plan usage snapshot (live from poller, falls back to DB, then state.json).
+    Always returns something — UI should check isStale.
+    """
+    # Prefer in-memory (most recent)
+    if _poller and _poller.current:
+        return _snapshot_to_dict(_poller.current)
+
+    # Try DB
+    row = db.get_latest_snapshot()
+    if row:
+        stale_sec = _staleness_seconds(row["recorded_at"])
+        return _snapshot_to_dict(row, is_stale=stale_sec > 600)
+
+    # Try state.json
+    state = load_state()
+    if state:
+        return _snapshot_to_dict(state)
+
+    raise HTTPException(
+        status_code=503,
+        detail="No usage data available yet. Make sure Claude Code is installed and you are logged in.",
+    )
+
+
+@app.post("/usage/refresh")
+async def usage_refresh():
+    """Force an immediate poll outside the normal schedule."""
+    if not _poller:
+        raise HTTPException(status_code=503, detail="Poller not running")
+    snap = await _poller.force_refresh()
+    if not snap:
+        raise HTTPException(status_code=502, detail="Failed to fetch usage from Anthropic API")
+    return _snapshot_to_dict(snap)
+
+
+@app.get("/usage/history")
+def usage_history(days: int = Query(default=7, ge=1, le=90)):
+    """
+    Plan usage snapshots over the last N days, for the trend chart.
+    Returns chronological list of {recordedAt, sessionPct, weeklyPct}.
+    """
+    rows = db.get_snapshot_history(days)
+    return [
+        {
+            "recordedAt":  r["recorded_at"],
+            "sessionPct":  r["session_pct"],
+            "weeklyPct":   r["weekly_pct"],
+        }
+        for r in rows
+    ]
+
+
+@app.get("/sessions")
+def sessions(limit: int = Query(default=20, ge=1, le=200)):
+    """Recent session summaries, newest first."""
+    rows = db.get_recent_sessions(limit)
+    return [
+        {
+            "sessionId":   r["session_id"],
+            "source":      r["source"],
+            "startedAt":   r["started_at"],
+            "endedAt":     r["ended_at"],
+            "durationSec": r["duration_sec"],
+            "model":       r["model"],
+            "project":     r["project"],
+            "costUsd":     r["cost_usd"],
+        }
+        for r in rows
+    ]
+
+
+@app.get("/sessions/by-source")
+def sessions_by_source(days: int = Query(default=7, ge=1, le=90)):
+    """Aggregate session stats grouped by source (code / cowork)."""
+    rows = db.get_sessions_by_source(days)
+    return [
+        {
+            "source":           r["source"],
+            "sessionCount":     r["session_count"],
+            "totalDurationSec": r["total_duration_sec"],
+            "totalCostUsd":     r["total_cost_usd"],
+        }
+        for r in rows
+    ]
+
+
+@app.get("/sessions/chart")
+def sessions_chart(days: int = Query(default=7, ge=1, le=90)):
+    """Daily cost per source for the stacked bar chart."""
+    rows = db.get_sessions_for_chart(days)
+    return [
+        {
+            "day":     r["day"],
+            "source":  r["source"],
+            "costUsd": r["cost_usd"],
+        }
+        for r in rows
+    ]
+
+
+@app.get("/config")
+def get_config():
+    """Return the active configuration (merged defaults + user overrides)."""
+    # Don't expose pricing keys in case they contain sensitive overrides
+    safe = {k: v for k, v in _config.items() if k != "pricing"}
+    return safe
+
+
+@app.get("/auth/status")
+def auth_status():
+    """Check whether the Claude OAuth token is present in Keychain."""
+    authenticated = is_authenticated()
+    return {
+        "authenticated": authenticated,
+        "message": (
+            "Claude OAuth token found in Keychain."
+            if authenticated
+            else "No Claude OAuth token found. Please ensure Claude Code is installed and you are logged in."
+        ),
+    }
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8765, reload=False)
