@@ -263,8 +263,18 @@ def usage_history(days: int = Query(default=7, ge=1, le=90)):
 
 @app.get("/sessions")
 def sessions(limit: int = Query(default=20, ge=1, le=200)):
-    """Recent session summaries, newest first."""
-    rows = db.get_recent_sessions(limit)
+    """
+    Recent session summaries, newest first.
+    Each row includes pctOfWeek: fraction of this week's total tracked cost.
+    """
+    rows      = db.get_recent_sessions(limit)
+    week_cost = db.get_week_total_cost(days=7)
+
+    def _pct(cost: float) -> float:
+        if week_cost <= 0:
+            return 0.0
+        return round(cost / week_cost, 4)   # 0–1, 4 dp is plenty
+
     return [
         {
             "sessionId":   r["session_id"],
@@ -275,9 +285,26 @@ def sessions(limit: int = Query(default=20, ge=1, le=200)):
             "model":       r["model"],
             "project":     r["project"],
             "costUsd":     r["cost_usd"],
+            "pctOfWeek":   _pct(r["cost_usd"]),
         }
         for r in rows
     ]
+
+
+@app.get("/sessions/stats")
+def sessions_stats(days: int = Query(default=7, ge=1, le=90)):
+    """
+    Aggregate stats for the stats cards:
+    costToday, costThisWeek, totalDurationSec, sessionCount, mostActiveProject.
+    """
+    stats = db.get_session_stats(days)
+    return {
+        "costToday":         stats["cost_today"],
+        "costThisWeek":      stats["cost_this_week"],
+        "totalDurationSec":  stats["total_duration_sec"],
+        "sessionCount":      stats["session_count"],
+        "mostActiveProject": stats["most_active_project"],
+    }
 
 
 @app.get("/sessions/by-source")

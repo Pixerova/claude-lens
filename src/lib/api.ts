@@ -33,6 +33,15 @@ export interface Session {
   model: string;
   project: string | null;
   costUsd: number;
+  pctOfWeek: number;    // 0–1, share of this week's total tracked cost
+}
+
+export interface SessionStats {
+  costToday: number;
+  costThisWeek: number;
+  totalDurationSec: number;
+  sessionCount: number;
+  mostActiveProject: string | null;
 }
 
 export interface SessionsBySource {
@@ -100,9 +109,14 @@ export const api = {
     return sidecarFetch<UsageHistoryPoint[]>(`/usage/history?days=${days}`);
   },
 
-  /** Recent sessions, newest first. */
+  /** Recent sessions, newest first. Each includes pctOfWeek. */
   getSessions(limit = 20): Promise<Session[]> {
     return sidecarFetch<Session[]>(`/sessions?limit=${limit}`);
+  },
+
+  /** Aggregate stats for the stats cards. */
+  getSessionStats(days = 7): Promise<SessionStats> {
+    return sidecarFetch<SessionStats>(`/sessions/stats?days=${days}`);
   },
 
   /** Aggregate stats grouped by source. */

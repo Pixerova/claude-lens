@@ -268,6 +268,73 @@ def prune_old_data(retention_days: int = 30) -> dict:
     return {"snapshots": snap_del, "sessions": sess_del, "suggestions": sugg_del}
 
 
+# ── Session stats ────────────────────────────────────────────────────────────
+
+def get_session_stats(days: int = 7) -> dict:
+    """
+    Aggregate session stats for the stats cards:
+      - cost_today        : sum of cost_usd for sessions starting today (UTC)
+      - cost_this_week    : sum of cost_usd for sessions in the last `days` days
+      - total_duration_sec: total session seconds in the last `days` days
+      - session_count     : number of sessions in the last `days` days
+      - most_active_project: project with highest total cost (None if no sessions)
+    """
+    today_cutoff = datetime.now(timezone.utc).date().isoformat()
+    week_cutoff  = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    conn = get_connection()
+
+    cost_today = conn.execute(
+        "SELECT COALESCE(SUM(cost_usd), 0) FROM session_summaries WHERE DATE(started_at) = ?",
+        (today_cutoff,),
+    ).fetchone()[0]
+
+    week_row = conn.execute(
+        """
+        SELECT COALESCE(SUM(cost_usd), 0)      AS cost_week,
+               COALESCE(SUM(duration_sec), 0)  AS dur_week,
+               COUNT(*)                         AS count_week
+        FROM session_summaries
+        WHERE started_at > ?
+        """,
+        (week_cutoff,),
+    ).fetchone()
+
+    project_row = conn.execute(
+        """
+        SELECT project, SUM(cost_usd) AS total
+        FROM session_summaries
+        WHERE started_at > ? AND project IS NOT NULL AND project != ''
+        GROUP BY project
+        ORDER BY total DESC
+        LIMIT 1
+        """,
+        (week_cutoff,),
+    ).fetchone()
+
+    conn.close()
+
+    return {
+        "cost_today":          float(cost_today),
+        "cost_this_week":      float(week_row["cost_week"]),
+        "total_duration_sec":  int(week_row["dur_week"]),
+        "session_count":       int(week_row["count_week"]),
+        "most_active_project": project_row["project"] if project_row else None,
+    }
+
+
+def get_week_total_cost(days: int = 7) -> float:
+    """Total cost across all sessions in the last `days` days. Used for pct_of_week calc."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    conn = get_connection()
+    total = conn.execute(
+        "SELECT COALESCE(SUM(cost_usd), 0) FROM session_summaries WHERE started_at > ?",
+        (cutoff,),
+    ).fetchone()[0]
+    conn.close()
+    return float(total)
+
+
 # ── Health info ──────────────────────────────────────────────────────────────
 
 def get_db_stats() -> dict:

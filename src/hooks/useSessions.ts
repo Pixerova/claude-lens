@@ -1,15 +1,15 @@
 /**
  * useSessions.ts — React hook for session data.
  *
- * Fetches recent sessions, by-source aggregates, and chart data.
+ * Fetches recent sessions, by-source aggregates, chart data, and stats cards.
  * Refreshes on a slow 5-minute timer (session data changes infrequently).
- * Also triggered manually via refresh() from the parent.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   api,
   type Session,
+  type SessionStats,
   type SessionsBySource,
   type ChartPoint,
 } from "../lib/api";
@@ -18,6 +18,7 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 export interface UseSessionsResult {
   sessions: Session[];
+  stats: SessionStats | null;
   bySource: SessionsBySource[];
   chartData: ChartPoint[];
   isLoading: boolean;
@@ -27,6 +28,7 @@ export interface UseSessionsResult {
 
 export function useSessions(days = 7, limit = 20): UseSessionsResult {
   const [sessions, setSessions]   = useState<Session[]>([]);
+  const [stats, setStats]         = useState<SessionStats | null>(null);
   const [bySource, setBySource]   = useState<SessionsBySource[]>([]);
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [isLoading, setLoading]   = useState(true);
@@ -35,12 +37,14 @@ export function useSessions(days = 7, limit = 20): UseSessionsResult {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [s, bs, cd] = await Promise.all([
+      const [s, st, bs, cd] = await Promise.all([
         api.getSessions(limit),
+        api.getSessionStats(days),
         api.getSessionsBySource(days),
         api.getSessionsChart(days),
       ]);
       setSessions(s);
+      setStats(st);
       setBySource(bs);
       setChartData(cd);
       setError(null);
@@ -51,7 +55,7 @@ export function useSessions(days = 7, limit = 20): UseSessionsResult {
     }
   }, [days, limit]);
 
-  // Schedule repeating poll
+  // Repeat poll
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => fetchAll(), POLL_INTERVAL_MS);
@@ -70,7 +74,7 @@ export function useSessions(days = 7, limit = 20): UseSessionsResult {
     await fetchAll();
   }, [fetchAll]);
 
-  return { sessions, bySource, chartData, isLoading, error, refresh };
+  return { sessions, stats, bySource, chartData, isLoading, error, refresh };
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────────────

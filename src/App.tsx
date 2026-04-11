@@ -2,22 +2,25 @@
  * App.tsx — Claude Lens floating widget root.
  *
  * Two views:
- *  • Compact  — always-visible strip: plan bars + stale dot + expand button
- *  • Expanded — full panel: plan bars, session list, cost chart, refresh button
+ *  • Compact  — plan bars + stale dot + suggestion badge + expand toggle
+ *  • Expanded — plan bars, stats cards, source breakdown (+ browser note),
+ *               cost chart, session list
  *
- * Drag region:  data-tauri-drag-region on the header row.
- * Theme:        dark glass (bg-surface/80 backdrop-blur).
+ * Drag region: data-tauri-drag-region on the header row.
+ * Theme:       dark glass (bg-surface/85 backdrop-blur-xl).
  */
 
 import React, { useState, useCallback } from "react";
 import { useUsage }    from "./hooks/useUsage";
 import { useSessions, formatCost, totalCostUsd } from "./hooks/useSessions";
-import { PlanBar }        from "./components/PlanBar";
-import { StaleIndicator } from "./components/StaleIndicator";
-import { SessionList }    from "./components/SessionList";
-import { UsageChart }     from "./components/UsageChart";
+import { PlanBar }          from "./components/PlanBar";
+import { StaleIndicator }   from "./components/StaleIndicator";
+import { SessionList }      from "./components/SessionList";
+import { UsageChart }       from "./components/UsageChart";
+import { StatsCards }       from "./components/StatsCards";
+import { SuggestionBadge }  from "./components/SuggestionBadge";
 
-// ── Icons (inline SVG to avoid extra deps) ────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────────────────────────────
 
 const IconRefresh = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -40,59 +43,57 @@ const IconChevronUp = () => (
   </svg>
 );
 
-// ── Divider ───────────────────────────────────────────────────────────────────
+// ── Small helpers ─────────────────────────────────────────────────────────────
 
 const Divider = () => <div className="h-px bg-white/8 my-3" />;
 
-// ── Spinning refresh ──────────────────────────────────────────────────────────
-
-interface RefreshButtonProps {
-  onClick: () => void;
-  loading: boolean;
-}
-
-const RefreshButton: React.FC<RefreshButtonProps> = ({ onClick, loading }) => (
+const RefreshButton: React.FC<{ onClick: () => void; loading: boolean }> = ({ onClick, loading }) => (
   <button
     onClick={onClick}
     disabled={loading}
     className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/8 transition-colors disabled:opacity-40"
     title="Force refresh"
   >
-    <span className={loading ? "animate-spin inline-block" : ""}>
-      <IconRefresh />
-    </span>
+    <span className={loading ? "animate-spin inline-block" : ""}><IconRefresh /></span>
   </button>
 );
 
-// ── Source breakdown row ──────────────────────────────────────────────────────
+// ── Source row (breakdown by code/cowork/browser) ─────────────────────────────
 
 interface SourceRowProps {
   label: string;
-  count: number;
-  durationSec: number;
+  count?: number;
+  durationSec?: number;
   costUsd: number;
+  muted?: boolean;      // browser row uses muted style
 }
 
-const SourceRow: React.FC<SourceRowProps> = ({ label, count, durationSec, costUsd }) => {
-  const hrs  = Math.floor(durationSec / 3600);
-  const mins = Math.floor((durationSec % 3600) / 60);
-  const dur  = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+const SourceRow: React.FC<SourceRowProps> = ({ label, count, durationSec, costUsd, muted }) => {
+  const hrs  = durationSec ? Math.floor(durationSec / 3600) : 0;
+  const mins = durationSec ? Math.floor((durationSec % 3600) / 60) : 0;
+  const dur  = durationSec
+    ? (hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`)
+    : null;
 
   return (
-    <div className="flex justify-between items-center text-xs">
+    <div className={`flex justify-between items-center text-xs ${muted ? "opacity-60" : ""}`}>
       <span className="text-gray-400">
         {label}
-        <span className="text-gray-600 ml-1">({count})</span>
+        {count !== undefined && (
+          <span className="text-gray-600 ml-1">({count})</span>
+        )}
       </span>
-      <div className="flex gap-3 text-gray-500">
-        <span>{dur}</span>
-        <span className="text-gray-400 font-medium">{formatCost(costUsd)}</span>
+      <div className="flex gap-3 text-gray-500 items-center">
+        {dur && <span>{dur}</span>}
+        <span className={`font-medium ${muted ? "text-gray-500" : "text-gray-400"}`}>
+          {muted ? "untracked" : formatCost(costUsd)}
+        </span>
       </div>
     </div>
   );
 };
 
-// ── Main App ──────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [expanded, setExpanded] = useState(false);
@@ -107,6 +108,7 @@ export default function App() {
 
   const {
     sessions,
+    stats,
     bySource,
     chartData,
     isLoading: sessionsLoading,
@@ -117,19 +119,24 @@ export default function App() {
     await Promise.all([refreshUsage(), refreshSessions()]);
   }, [refreshUsage, refreshSessions]);
 
-  // Border accent colour based on plan level
+  // Suggestion count — stub for M5, always 0 until engine is wired
+  const suggestionCount = 0;
+
+  // Border accent based on warning level
   const borderAccent =
     level === "danger" ? "border-danger/40" :
     level === "amber"  ? "border-amber/40"  :
     "border-white/10";
 
+  // "Other (browser)" — visible only when we have OAuth data and local sessions
+  const localCostWeek = totalCostUsd(bySource);
+  const showBrowserRow =
+    usage !== null &&
+    bySource.length > 0 &&
+    usage.weeklyPct > 0;
+
   return (
-    <div
-      className={`
-        min-h-screen flex items-start justify-center p-2
-        bg-transparent
-      `}
-    >
+    <div className="min-h-screen flex items-start justify-center p-2 bg-transparent">
       <div
         className={`
           w-full max-w-[320px] rounded-2xl
@@ -145,7 +152,6 @@ export default function App() {
           data-tauri-drag-region
           className="flex items-center justify-between px-4 pt-4 pb-2 cursor-grab active:cursor-grabbing select-none"
         >
-          {/* Logo + title */}
           <div className="flex items-center gap-2" data-tauri-drag-region>
             <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shrink-0">
               <span className="text-[9px] font-bold text-white leading-none">CL</span>
@@ -158,11 +164,10 @@ export default function App() {
             )}
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-1">
             <RefreshButton onClick={handleRefresh} loading={usageLoading} />
             <button
-              onClick={() => setExpanded((v) => !v)}
+              onClick={() => setExpanded(v => !v)}
               className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/8 transition-colors"
               title={expanded ? "Collapse" : "Expand"}
             >
@@ -172,13 +177,11 @@ export default function App() {
         </div>
 
         {/* ── Plan bars ── */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           {usageError ? (
             <div className="py-3 text-center">
               <p className="text-xs text-danger">Cannot reach sidecar</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">
-                Make sure Claude Lens is running
-              </p>
+              <p className="text-[10px] text-gray-600 mt-0.5">Make sure Claude Lens is running</p>
             </div>
           ) : usageLoading && !usage ? (
             <div className="space-y-3">
@@ -201,23 +204,53 @@ export default function App() {
               />
               {usage.isStale && (
                 <div className="mt-2">
-                  <StaleIndicator
-                    isStale={usage.isStale}
-                    recordedAt={usage.recordedAt}
-                    error={usageError}
-                  />
+                  <StaleIndicator isStale={usage.isStale} recordedAt={usage.recordedAt} />
                 </div>
               )}
             </>
           ) : null}
         </div>
 
+        {/* ── Compact footer ── */}
+        {!expanded && (
+          <>
+            {localCostWeek > 0 && (
+              <div className="px-4 pb-2 flex justify-between items-center">
+                <span className="text-[10px] text-gray-600">
+                  {formatCost(localCostWeek)} tracked this week
+                </span>
+                <span className="text-[10px] text-gray-600">
+                  {sessions.length > 0
+                    ? `${sessions.length} session${sessions.length === 1 ? "" : "s"}`
+                    : ""}
+                </span>
+              </div>
+            )}
+            <SuggestionBadge
+              count={suggestionCount}
+              onView={() => setExpanded(true)}
+            />
+            {/* Bottom padding when no suggestion badge */}
+            {suggestionCount === 0 && <div className="pb-2" />}
+          </>
+        )}
+
         {/* ── Expanded panel ── */}
         {expanded && (
           <>
+            {/* Stats cards */}
+            {stats && (
+              <>
+                <Divider />
+                <div className="px-4">
+                  <StatsCards stats={stats} />
+                </div>
+              </>
+            )}
+
             <Divider />
 
-            {/* Cost breakdown by source */}
+            {/* Source breakdown */}
             <div className="px-4 space-y-1.5">
               <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
                 7-day breakdown
@@ -226,7 +259,7 @@ export default function App() {
                 <p className="text-xs text-gray-600">No sessions recorded yet.</p>
               ) : (
                 <>
-                  {bySource.map((s) => (
+                  {bySource.map(s => (
                     <SourceRow
                       key={s.source}
                       label={s.source === "code" ? "Claude Code" : "Cowork"}
@@ -235,11 +268,22 @@ export default function App() {
                       costUsd={s.totalCostUsd}
                     />
                   ))}
-                  {bySource.length > 1 && (
-                    <div className="flex justify-between items-center text-xs pt-1 border-t border-white/8">
-                      <span className="text-gray-500">Total</span>
+
+                  {/* Other (incl. browser) — always shown to indicate gap */}
+                  {showBrowserRow && (
+                    <SourceRow
+                      label="Other (incl. browser)"
+                      costUsd={0}
+                      muted
+                    />
+                  )}
+
+                  {/* Total */}
+                  {bySource.length > 0 && (
+                    <div className="flex justify-between items-center text-xs pt-1.5 border-t border-white/8">
+                      <span className="text-gray-500">Tracked total</span>
                       <span className="text-gray-300 font-semibold">
-                        {formatCost(totalCostUsd(bySource))}
+                        {formatCost(localCostWeek)}
                       </span>
                     </div>
                   )}
@@ -261,32 +305,21 @@ export default function App() {
 
             <Divider />
 
-            {/* Recent sessions */}
+            {/* Session list */}
             <div className="px-4 pb-4">
               <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
                 Recent sessions
               </p>
               <SessionList sessions={sessions} isLoading={sessionsLoading} />
             </div>
-          </>
-        )}
 
-        {/* ── Compact footer (collapsed only) ── */}
-        {!expanded && (
-          <div className="px-4 pb-3 flex justify-between items-center">
-            {bySource.length > 0 ? (
-              <span className="text-[10px] text-gray-600">
-                {formatCost(totalCostUsd(bySource))} this week
-              </span>
-            ) : (
-              <span />
-            )}
-            <span className="text-[10px] text-gray-600">
-              {sessions.length > 0
-                ? `${sessions.length} session${sessions.length === 1 ? "" : "s"}`
-                : ""}
-            </span>
-          </div>
+            {/* Suggestion badge at bottom of expanded view too */}
+            <SuggestionBadge
+              count={suggestionCount}
+              onView={() => {}}   // already expanded — will scroll to suggestions in M5
+            />
+            {suggestionCount === 0 && <div className="pb-1" />}
+          </>
         )}
       </div>
     </div>

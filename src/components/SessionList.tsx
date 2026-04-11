@@ -1,7 +1,7 @@
 /**
  * SessionList.tsx — Scrollable list of recent sessions.
  *
- * Each row shows: source badge · project/model · % of session · duration · cost
+ * Each row: % of week's tracked cost · source badge · project/model · duration · cost · relative time
  * Order: most recent first.
  */
 
@@ -18,7 +18,7 @@ function SourceBadge({ source }: { source: "code" | "cowork" }) {
   const isCode = source === "code";
   return (
     <span
-      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide uppercase leading-none ${
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide uppercase leading-none shrink-0 ${
         isCode
           ? "bg-primary/20 text-primary"
           : "bg-purple-500/20 text-purple-400"
@@ -42,6 +42,15 @@ function relativeDate(isoString: string): string {
   return `${days}d ago`;
 }
 
+function PctPill({ pct }: { pct: number }) {
+  const display = pct < 0.005 ? "< 1%" : `${Math.round(pct * 100)}%`;
+  return (
+    <span className="w-9 shrink-0 text-right text-[10px] font-semibold text-gray-400 tabular-nums">
+      {display}
+    </span>
+  );
+}
+
 export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading }) => {
   if (isLoading) {
     return (
@@ -62,7 +71,15 @@ export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading })
   }
 
   return (
-    <div className="mt-2 space-y-1 max-h-52 overflow-y-auto pr-1">
+    <div className="mt-1 space-y-1 max-h-52 overflow-y-auto pr-1">
+      {/* Column headers */}
+      <div className="flex items-center gap-2 px-2.5 mb-0.5">
+        <span className="w-9 shrink-0 text-right text-[9px] text-gray-600 uppercase tracking-wide">%</span>
+        <span className="flex-1 text-[9px] text-gray-600 uppercase tracking-wide">Project</span>
+        <span className="text-[9px] text-gray-600 uppercase tracking-wide shrink-0">Duration</span>
+        <span className="text-[9px] text-gray-600 uppercase tracking-wide shrink-0 w-12 text-right">Cost</span>
+      </div>
+
       {sessions.map((s) => {
         const label = s.project ?? s.model ?? s.source;
         return (
@@ -70,6 +87,7 @@ export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading })
             key={s.sessionId}
             className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-white/5 hover:bg-white/8 transition-colors"
           >
+            <PctPill pct={s.pctOfWeek} />
             <SourceBadge source={s.source} />
 
             {/* Project / model label */}
@@ -81,13 +99,12 @@ export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading })
             </span>
 
             {/* Stats */}
-            <div className="flex items-center gap-2 text-[10px] text-gray-500 shrink-0">
-              <span className="text-gray-400 font-medium">
-                {formatDuration(s.durationSec)}
-              </span>
-              <span>{formatCost(s.costUsd)}</span>
-              <span className="text-gray-600">{relativeDate(s.startedAt)}</span>
-            </div>
+            <span className="text-[10px] text-gray-400 shrink-0">
+              {formatDuration(s.durationSec)}
+            </span>
+            <span className="text-[10px] text-gray-500 shrink-0 w-12 text-right tabular-nums">
+              {formatCost(s.costUsd)}
+            </span>
           </div>
         );
       })}
