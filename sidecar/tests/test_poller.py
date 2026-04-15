@@ -14,6 +14,7 @@ import pytest
 import poller
 from poller import (
     UsageSnapshot,
+    RateLimitedError,
     compute_interval,
     load_state,
     save_state,
@@ -71,17 +72,20 @@ class TestStateFile:
         )
 
     def test_load_state_returns_none_when_no_file(self, isolated_state):
-        assert load_state() is None
+        snapshot, interval = load_state()
+        assert snapshot is None
+        assert interval == 0
 
     def test_save_and_load_round_trips(self, isolated_state):
         snap = self._make_snapshot(session_pct=0.42, weekly_pct=0.77)
         save_state(snap, interval_sec=120)
-        loaded = load_state()
+        loaded, interval = load_state()
 
         assert loaded is not None
         assert abs(loaded.session_pct - 0.42) < 1e-6
         assert abs(loaded.weekly_pct  - 0.77) < 1e-6
         assert loaded.is_stale is True   # loaded from disk → always stale
+        assert interval == 120
 
     def test_save_writes_interval(self, isolated_state):
         snap = self._make_snapshot()
@@ -98,13 +102,15 @@ class TestStateFile:
 
     def test_load_state_with_malformed_file_returns_none(self, isolated_state):
         isolated_state.write_text("not valid json {{{{")
-        result = load_state()
-        assert result is None
+        snapshot, interval = load_state()
+        assert snapshot is None
+        assert interval == 0
 
     def test_load_state_with_empty_file_returns_none(self, isolated_state):
         isolated_state.write_text("")
-        result = load_state()
-        assert result is None
+        snapshot, interval = load_state()
+        assert snapshot is None
+        assert interval == 0
 
     def test_save_creates_parent_directory(self, tmp_path, monkeypatch):
         nested = tmp_path / "deep" / "dir" / "state.json"
@@ -205,9 +211,10 @@ class TestFetchUsage:
     @pytest.mark.asyncio
     async def test_successful_response_parsed_correctly(self):
         mock_response = MagicMock()
+        # API returns utilization as 0–100 (e.g. 21 = 21%)
         mock_response.json.return_value = {
-            "five_hour": {"utilization": 0.21, "resets_at": "2026-04-10T17:00:00Z"},
-            "seven_day": {"utilization": 0.25, "resets_at": "2026-04-15T08:00:00Z"},
+            "five_hour": {"utilization": 21, "resets_at": "2026-04-10T17:00:00Z"},
+            "seven_day": {"utilization": 25, "resets_at": "2026-04-15T08:00:00Z"},
         }
         mock_response.raise_for_status = MagicMock()
 
@@ -220,8 +227,8 @@ class TestFetchUsage:
             snap = await poller.fetch_usage("fake-token")
 
         assert snap is not None
-        assert abs(snap.session_pct - 0.21) < 1e-6
-        assert abs(snap.weekly_pct - 0.25) < 1e-6
+        assert abs(snap.session_pct - 0.21) < 1e-6   # 21 / 100
+        assert abs(snap.weekly_pct - 0.25) < 1e-6    # 25 / 100
         assert snap.session_resets_at == "2026-04-10T17:00:00Z"
         assert snap.is_stale is False
 
@@ -238,10 +245,11 @@ class TestFetchUsage:
         assert snap is None
 
     @pytest.mark.asyncio
-    async def test_429_returns_none(self):
+    async def test_429_raises_rate_limited_error(self):
         import httpx
         mock_response = MagicMock()
         mock_response.status_code = 429
+        mock_response.headers = {"Retry-After": "120"}
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "Rate limited", request=MagicMock(), response=mock_response
         )
@@ -252,5 +260,26 @@ class TestFetchUsage:
             MockClient.return_value.__aenter__ = AsyncMock(return_value=instance)
             MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            snap = await poller.fetch_usage("fake-token")
-        assert snap is None
+            with pytest.raises(RateLimitedError) as exc_info:
+                await poller.fetch_usage("fake-token")
+        assert exc_info.value.retry_after == 120
+
+    @pytest.mark.asyncio
+    async def test_429_uses_default_retry_after_when_header_missing(self):
+        import httpx
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.headers = {}
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Rate limited", request=MagicMock(), response=mock_response
+        )
+
+        with patch("poller.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+            instance.get = AsyncMock(return_value=mock_response)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=instance)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with pytest.raises(RateLimitedError) as exc_info:
+                await poller.fetch_usage("fake-token")
+        assert exc_info.value.retry_after == poller.RATE_LIMIT_BACKOFF_MAX_SEC
