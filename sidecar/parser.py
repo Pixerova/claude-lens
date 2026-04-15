@@ -33,7 +33,7 @@ COWORK_DIR = (
     / "Library"
     / "Application Support"
     / "Claude"
-    / "claude-code-sessions"
+    / "local-agent-mode-sessions"
 )
 
 
@@ -222,7 +222,8 @@ def scan_all_sessions(retention_days: int = 30) -> int:
     Walk both source directories and upsert all session summaries.
     Called once on startup; returns count of sessions processed.
     """
-    count = 0
+    code_count = 0
+    cowork_count = 0
 
     # Claude Code
     if CLAUDE_CODE_DIR.exists():
@@ -230,29 +231,39 @@ def scan_all_sessions(retention_days: int = 30) -> int:
             summary = parse_code_session(jsonl_file)
             if summary:
                 upsert_session_summary(**summary)
-                count += 1
+                log.debug("Code Session: %s | project=%s model=%s", jsonl_file.name, summary.get("project"), summary.get("model"))
+                code_count += 1
+    else:
+        log.info("Code Sessions directory not found (skipping): %s", CLAUDE_CODE_DIR)
 
-    # Cowork
+    # Cowork — JSONL files nested inside local-agent-mode-sessions VMs,
+    # same format as Claude Code sessions.
     if COWORK_DIR.exists():
-        for json_file in COWORK_DIR.rglob("*.json"):
-            summary = parse_cowork_session(json_file)
+        for jsonl_file in COWORK_DIR.rglob("*.jsonl"):
+            if jsonl_file.name == "audit.jsonl":
+                continue
+            summary = parse_code_session(jsonl_file)
             if summary:
+                summary["source"] = "cowork"
                 upsert_session_summary(**summary)
-                count += 1
+                log.debug("Cowork Session: %s | project=%s model=%s", jsonl_file.name, summary.get("project"), summary.get("model"))
+                cowork_count += 1
+    else:
+        log.info("Cowork Sessions directory not found (skipping): %s", COWORK_DIR)
 
-    log.info("Startup scan complete: %d sessions processed", count)
-    return count
+    log.info("Startup scan complete: %d Code Sessions, %d Cowork Sessions", code_count, cowork_count)
+    return code_count + cowork_count
 
 
 def _process_file(path: Path) -> None:
-    """Parse a single file and upsert, based on extension."""
-    if path.suffix == ".jsonl":
-        summary = parse_code_session(path)
-    elif path.suffix == ".json":
-        summary = parse_cowork_session(path)
-    else:
+    """Parse a single file and upsert, based on extension and location."""
+    if path.suffix != ".jsonl" or path.name == "audit.jsonl":
         return
+    summary = parse_code_session(path)
     if summary:
+        # Tag as cowork if it lives inside the Cowork sessions directory
+        if COWORK_DIR in path.parents:
+            summary["source"] = "cowork"
         upsert_session_summary(**summary)
         log.debug("Upserted session %s from %s", summary["session_id"], path.name)
 

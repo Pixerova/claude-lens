@@ -71,6 +71,12 @@ def _extract_access_token(raw: str) -> Optional[str]:
         try:
             data = json.loads(raw)
             token = data.get("accessToken") or data.get("access_token")
+            if not token:
+                inner = data.get("claudeAiOauth")
+                if isinstance(inner, dict):
+                    token = inner.get("accessToken") or inner.get("access_token")
+                elif isinstance(inner, str):
+                    token = inner
             if token:
                 return token
         except json.JSONDecodeError:

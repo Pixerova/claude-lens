@@ -48,10 +48,10 @@ DEFAULT_CONFIG = {
     "retentionDays": 30,
     "poll": {
         "thresholds": {
-            "critical": {"above": 0.90, "intervalSec": 30},
-            "high":     {"above": 0.80, "intervalSec": 60},
-            "elevated": {"above": 0.60, "intervalSec": 120},
-            "normal":   {"above": 0.20, "intervalSec": 300},
+            "critical": {"above": 0.90, "intervalSec": 60},
+            "high":     {"above": 0.80, "intervalSec": 120},
+            "elevated": {"above": 0.60, "intervalSec": 300},
+            "normal":   {"above": 0.20, "intervalSec": 600},
             "low":      {"above": 0.05, "intervalSec": 1800},
             "minimal":  {"above": 0.00, "intervalSec": 3600},
         }
@@ -148,7 +148,7 @@ app = FastAPI(title="Claude Lens Sidecar", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["tauri://localhost", "http://localhost:*", "http://127.0.0.1:*"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -223,7 +223,7 @@ async def usage_current():
         return _snapshot_to_dict(row, is_stale=stale_sec > 600)
 
     # Try state.json
-    state = load_state()
+    state, _ = load_state()
     if state:
         return _snapshot_to_dict(state)
 

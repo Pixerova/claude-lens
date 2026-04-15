@@ -44,7 +44,8 @@ def set_pricing_override(override: dict[str, dict[str, float]]) -> None:
 
 def _get_rates(model: str) -> Optional[dict[str, float]]:
     """Return pricing rates for a model, checking overrides first."""
-    if not model:
+    if not model or model == "unknown":
+        log.debug("No pricing for model '%s'; cost will be 0", model)
         return None
     if model in _pricing_override:
         return _pricing_override[model]

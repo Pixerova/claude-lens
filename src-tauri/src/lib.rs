@@ -11,7 +11,9 @@ use tauri::{
     AppHandle, Manager, Runtime,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     menu::{Menu, MenuItem},
+    image::Image,
 };
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 // ── Sidecar ───────────────────────────────────────────────────────────────────
@@ -62,14 +64,24 @@ pub fn run() {
             // 1. Start the Python sidecar
             start_sidecar(app.handle());
 
+            // Apply macOS vibrancy (under-window blur effect)
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = apply_vibrancy(&window, NSVisualEffectMaterial::UnderWindowBackground, None, None);
+            }
+
             // 2. Build tray menu (right-click)
             let show_item = MenuItem::with_id(app, "show", "Open Claude Lens", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
             // 3. Build tray icon
+            let tray_icon_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("icons/tray-icon.png");
+            let tray_icon = Image::from_path(&tray_icon_path)
+                .unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
+
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
+                .icon_as_template(true)
                 .tooltip("Claude Lens")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {

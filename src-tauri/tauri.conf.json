@@ -15,27 +15,24 @@
         "label": "main",
         "title": "Claude Lens",
         "width": 340,
-        "height": 420,
-        "resizable": false,
+        "height": 200,
+        "resizable": true,
+        "minWidth": 280,
+        "minHeight": 180,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,
         "shadow": true,
-        "vibrancy": "under-window",
         "x": 1200,
         "y": 80
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/tray-icon.png",
-      "iconAsTemplate": true,
-      "tooltip": "Claude Lens"
-    },
-    "security": {
+"security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,
@@ -58,7 +55,7 @@
     }
   },
   "plugins": {
-    "global-shortcut": {},
+    "global-shortcut": null,
     "shell": {
       "open": true
     }

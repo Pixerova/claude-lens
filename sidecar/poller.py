@@ -9,7 +9,9 @@ Polls GET https://api.anthropic.com/api/oauth/usage on an adaptive schedule:
   ≥ 5%   → every 1800 s (low)
   < 5%   → every 3600 s (minimal)
 
-On 429 / network errors, backs off exponentially up to a 10-min cap.
+On 429, respects the Retry-After header and backs off up to a 2-hour cap.
+On other errors, backs off exponentially up to a 10-min cap.
+On restart, honours the saved poll interval to avoid an immediate burst.
 The last known good response is always persisted to state.json for offline display.
 """
 
@@ -46,7 +48,17 @@ DEFAULT_THRESHOLDS: list[tuple[float, int]] = [
     (0.00, 3600),
 ]
 
-BACKOFF_MAX_SEC = 600   # 10 minutes
+BACKOFF_MAX_SEC = 600        # 10 minutes — for transient errors
+RATE_LIMIT_BACKOFF_MAX_SEC = 7200  # 2 hours — for 429s
+
+
+# ── Exceptions ────────────────────────────────────────────────────────────────
+
+class RateLimitedError(Exception):
+    """Raised when the API returns 429. retry_after is seconds to wait."""
+    def __init__(self, retry_after: int):
+        self.retry_after = retry_after
+        super().__init__(f"Rate limited — retry after {retry_after}s")
 
 
 # ── Data model ────────────────────────────────────────────────────────────────
@@ -63,14 +75,18 @@ class UsageSnapshot:
 
 # ── State file ────────────────────────────────────────────────────────────────
 
-def load_state() -> Optional[UsageSnapshot]:
-    """Load the last known usage snapshot from disk (for offline display)."""
+def load_state() -> tuple[Optional[UsageSnapshot], int]:
+    """
+    Load the last known usage snapshot and saved poll interval from disk.
+    Returns (snapshot, interval_sec). interval_sec is 0 if not saved.
+    """
     try:
         if STATE_PATH.exists():
             data = json.loads(STATE_PATH.read_text())
             usage = data.get("lastKnownUsage", {})
+            interval = int(data.get("currentIntervalSec", 0))
             if usage:
-                return UsageSnapshot(
+                snapshot = UsageSnapshot(
                     session_pct=usage["sessionPct"],
                     session_resets_at=usage["sessionResetsAt"],
                     weekly_pct=usage["weeklyPct"],
@@ -78,9 +94,10 @@ def load_state() -> Optional[UsageSnapshot]:
                     recorded_at=data.get("lastPollAt", ""),
                     is_stale=True,
                 )
+                return snapshot, interval
     except Exception as exc:
         log.debug("Could not load state.json: %s", exc)
-    return None
+    return None, 0
 
 
 def save_state(snapshot: UsageSnapshot, interval_sec: int) -> None:
@@ -137,10 +154,10 @@ async def fetch_usage(token: str) -> Optional[UsageSnapshot]:
             now = datetime.now(timezone.utc).isoformat()
 
             snapshot = UsageSnapshot(
-                session_pct=float(five_hour.get("utilization", 0)),
-                session_resets_at=five_hour.get("resets_at", ""),
-                weekly_pct=float(seven_day.get("utilization", 0)),
-                weekly_resets_at=seven_day.get("resets_at", ""),
+                session_pct=float(five_hour.get("utilization", 0)) / 100,
+                session_resets_at=five_hour.get("resets_at") or "",
+                weekly_pct=float(seven_day.get("utilization", 0)) / 100,
+                weekly_resets_at=seven_day.get("resets_at") or "",
                 recorded_at=now,
                 is_stale=False,
             )
@@ -148,7 +165,8 @@ async def fetch_usage(token: str) -> Optional[UsageSnapshot]:
 
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 429:
-            log.warning("Rate limited by usage API (429)")
+            retry_after = int(exc.response.headers.get("Retry-After", RATE_LIMIT_BACKOFF_MAX_SEC))
+            raise RateLimitedError(retry_after)
         elif exc.response.status_code == 401:
             log.error("OAuth token rejected (401) — may need to re-authenticate Claude Code")
         else:
@@ -179,10 +197,26 @@ class UsagePoller:
     ):
         self._on_update = on_update
         self._thresholds = thresholds
-        self._current: Optional[UsageSnapshot] = load_state()
-        self._interval_sec: int = DEFAULT_THRESHOLDS[3][1]  # start at 'normal'
+        self._current, saved_interval = load_state()
         self._backoff_sec: int = 0
         self._running = False
+
+        # Calculate how long to wait before the first poll based on saved state.
+        # If we restarted before the saved interval elapsed, wait the remainder
+        # rather than hammering the API immediately.
+        self._initial_sleep_sec: int = 0
+        if self._current and saved_interval > 0:
+            try:
+                last_poll = datetime.fromisoformat(self._current.recorded_at)
+                elapsed = int((datetime.now(timezone.utc) - last_poll).total_seconds())
+                remaining = saved_interval - elapsed
+                self._initial_sleep_sec = max(0, remaining)
+            except Exception:
+                pass
+
+        self._interval_sec: int = saved_interval or DEFAULT_THRESHOLDS[3][1]
+        if self._initial_sleep_sec > 0:
+            log.info("Resuming poll schedule — first poll in %ds", self._initial_sleep_sec)
 
     @property
     def current(self) -> Optional[UsageSnapshot]:
@@ -199,6 +233,10 @@ class UsagePoller:
         self._running = True
         consecutive_failures = 0
 
+        # Honour the saved poll schedule on restart
+        if self._initial_sleep_sec > 0:
+            await asyncio.sleep(self._initial_sleep_sec)
+
         while self._running:
             token = get_oauth_token()
             if not token:
@@ -206,14 +244,25 @@ class UsagePoller:
                 await asyncio.sleep(60)
                 continue
 
-            snapshot = await fetch_usage(token)
+            try:
+                snapshot = await fetch_usage(token)
+            except RateLimitedError as exc:
+                consecutive_failures += 1
+                if self._current:
+                    self._current.is_stale = True
+                wait = min(exc.retry_after, RATE_LIMIT_BACKOFF_MAX_SEC)
+                log.warning(
+                    "Rate limited (429) — backing off %ds (attempt %d)",
+                    wait, consecutive_failures,
+                )
+                await asyncio.sleep(wait)
+                continue
 
             if snapshot:
                 consecutive_failures = 0
                 self._backoff_sec = 0
                 self._current = snapshot
 
-                # Persist to DB and state file
                 store_snapshot(
                     session_pct=snapshot.session_pct,
                     session_resets=snapshot.session_resets_at,
@@ -237,7 +286,7 @@ class UsagePoller:
                 await asyncio.sleep(self._interval_sec)
 
             else:
-                # Failed — mark current as stale, apply exponential backoff
+                # Transient failure — exponential backoff capped at 10 min
                 consecutive_failures += 1
                 if self._current:
                     self._current.is_stale = True

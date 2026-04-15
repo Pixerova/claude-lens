@@ -10,7 +10,9 @@
  * Theme:       dark glass (bg-surface/85 backdrop-blur-xl).
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import { useUsage }    from "./hooks/useUsage";
 import { useSessions, formatCost, totalCostUsd } from "./hooks/useSessions";
 import { PlanBar }          from "./components/PlanBar";
@@ -119,6 +121,19 @@ export default function App() {
     await Promise.all([refreshUsage(), refreshSessions()]);
   }, [refreshUsage, refreshSessions]);
 
+  // Resize window to match collapsed/expanded content
+  useEffect(() => {
+    const win = getCurrentWindow();
+    const height = expanded ? 520 : 200;
+    win.setSize(new LogicalSize(340, height)).catch(() => {});
+  }, [expanded]);
+
+  // Drag from header
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    getCurrentWindow().startDragging().catch(() => {});
+  }, []);
+
   // Suggestion count — stub for M5, always 0 until engine is wired
   const suggestionCount = 0;
 
@@ -139,7 +154,7 @@ export default function App() {
     <div className="min-h-screen flex items-start justify-center p-2 bg-transparent">
       <div
         className={`
-          w-full max-w-[320px] rounded-2xl
+          w-full rounded-2xl
           bg-surface/85 backdrop-blur-xl
           border ${borderAccent}
           shadow-2xl shadow-black/50
@@ -149,14 +164,14 @@ export default function App() {
       >
         {/* ── Header / drag region ── */}
         <div
-          data-tauri-drag-region
+          onMouseDown={handleDragStart}
           className="flex items-center justify-between px-4 pt-4 pb-2 cursor-grab active:cursor-grabbing select-none"
         >
-          <div className="flex items-center gap-2" data-tauri-drag-region>
+          <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shrink-0">
               <span className="text-[9px] font-bold text-white leading-none">CL</span>
             </div>
-            <span className="text-sm font-semibold text-gray-200 tracking-tight" data-tauri-drag-region>
+            <span className="text-sm font-semibold text-gray-200 tracking-tight">
               Claude Lens
             </span>
             {usage?.isStale && (
