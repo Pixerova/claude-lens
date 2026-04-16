@@ -1,6 +1,6 @@
 """
-test_parser.py — Tests for parser.py: JSONL parsing, Cowork JSON parsing,
-                 edge cases, and field extraction correctness.
+test_parser.py — Tests for parser.py: JSONL parsing, edge cases, and field
+                 extraction correctness (both Claude Code and Cowork sources).
 
 No filesystem watchers are started in these tests (those require watchdog
 which needs real directories; we test the parsing functions directly).
@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from parser import parse_code_session, parse_cowork_session
+from parser import parse_code_session
 from conftest import write_jsonl, make_code_events
 
 
@@ -168,130 +168,3 @@ class TestParseCodeSession:
         assert result["duration_sec"] >= 0
 
 
-# ── parse_cowork_session ──────────────────────────────────────────────────────
-
-class TestParseCoworkSession:
-
-    def _write_cowork(self, tmp_path, data: dict, filename="session.json") -> Path:
-        path = tmp_path / filename
-        path.write_text(json.dumps(data))
-        return path
-
-    def _valid_cowork_data(self, **overrides):
-        base = {
-            "sessionId": "cowork-sess-001",
-            "startedAt": "2026-04-10T14:00:00+00:00",
-            "endedAt":   "2026-04-10T14:08:00+00:00",
-            "model":     "claude-sonnet-4-6",
-            "project":   "browser-automation",
-            "usage": {
-                "input_tokens": 500,
-                "output_tokens": 200,
-                "cache_read_input_tokens": 0,
-                "cache_creation_input_tokens": 0,
-            },
-        }
-        return {**base, **overrides}
-
-    def test_valid_session_returns_dict(self, tmp_path):
-        f = self._write_cowork(tmp_path, self._valid_cowork_data())
-        result = parse_cowork_session(f)
-        assert result is not None
-        assert isinstance(result, dict)
-
-    def test_source_is_cowork(self, tmp_path):
-        f = self._write_cowork(tmp_path, self._valid_cowork_data())
-        result = parse_cowork_session(f)
-        assert result["source"] == "cowork"
-
-    def test_session_id_extracted(self, tmp_path):
-        f = self._write_cowork(tmp_path, self._valid_cowork_data(sessionId="cw-xyz"))
-        result = parse_cowork_session(f)
-        assert result["session_id"] == "cw-xyz"
-
-    def test_duration_calculated(self, tmp_path):
-        # 14:00 → 14:08 = 480 seconds
-        f = self._write_cowork(tmp_path, self._valid_cowork_data())
-        result = parse_cowork_session(f)
-        assert result["duration_sec"] == 480
-
-    def test_cost_is_positive_for_known_model(self, tmp_path):
-        f = self._write_cowork(tmp_path, self._valid_cowork_data())
-        result = parse_cowork_session(f)
-        assert result["cost_usd"] > 0
-
-    def test_project_extracted(self, tmp_path):
-        f = self._write_cowork(tmp_path, self._valid_cowork_data(project="invoice-filler"))
-        result = parse_cowork_session(f)
-        assert result["project"] == "invoice-filler"
-
-    def test_project_from_cwd_uses_leaf(self, tmp_path):
-        data = self._valid_cowork_data()
-        del data["project"]
-        data["cwd"] = "/Users/martha/projects/deep-project"
-        f = self._write_cowork(tmp_path, data)
-        result = parse_cowork_session(f)
-        assert result["project"] == "deep-project"
-
-    def test_session_id_falls_back_to_filename(self, tmp_path):
-        data = self._valid_cowork_data()
-        del data["sessionId"]
-        f = self._write_cowork(tmp_path, data, filename="my-cowork-file.json")
-        result = parse_cowork_session(f)
-        assert result["session_id"] == "my-cowork-file"
-
-    def test_missing_timestamp_returns_none(self, tmp_path):
-        data = self._valid_cowork_data()
-        del data["startedAt"]
-        f = self._write_cowork(tmp_path, data)
-        result = parse_cowork_session(f)
-        assert result is None
-
-    def test_invalid_json_returns_none(self, tmp_path):
-        f = tmp_path / "bad.json"
-        f.write_text("{not: valid json")
-        assert parse_cowork_session(f) is None
-
-    def test_empty_file_returns_none(self, tmp_path):
-        f = tmp_path / "empty.json"
-        f.write_text("")
-        assert parse_cowork_session(f) is None
-
-    def test_nonexistent_file_returns_none(self, tmp_path):
-        assert parse_cowork_session(tmp_path / "ghost.json") is None
-
-    def test_array_json_returns_none(self, tmp_path):
-        """Top-level JSON array (not an object) should return None."""
-        f = tmp_path / "array.json"
-        f.write_text(json.dumps([{"key": "value"}]))
-        assert parse_cowork_session(f) is None
-
-    def test_alternate_field_names_parsed(self, tmp_path):
-        """Support alternative field names seen in different Cowork versions."""
-        data = {
-            "id":         "alt-id-001",
-            "created_at": "2026-04-10T15:00:00+00:00",
-            "updated_at": "2026-04-10T15:20:00+00:00",
-            "model":      "claude-haiku-4-5-20251001",
-            "tokens": {
-                "input_tokens": 100,
-                "output_tokens": 50,
-                "cache_read_input_tokens": 0,
-                "cache_creation_input_tokens": 0,
-            },
-        }
-        f = self._write_cowork(tmp_path, data)
-        result = parse_cowork_session(f)
-        assert result is not None
-        assert result["session_id"] == "alt-id-001"
-        assert result["duration_sec"] == 20 * 60
-
-    def test_zero_usage_gives_zero_cost(self, tmp_path):
-        data = self._valid_cowork_data()
-        data["usage"] = {
-            "input_tokens": 0, "output_tokens": 0,
-            "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
-        }
-        f = self._write_cowork(tmp_path, data)
-        result = parse_cowork_session(f)
-        assert result["cost_usd"] == 0.0

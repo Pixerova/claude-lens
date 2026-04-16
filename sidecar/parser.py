@@ -1,25 +1,24 @@
 """
-parser.py — Parse Claude Code JSONL sessions and Cowork JSON sessions.
+parser.py — Parse Claude Code JSONL sessions and Cowork JSONL sessions.
             Also sets up filesystem watchers for live updates.
 
 Sources:
   Claude Code  → ~/.claude/projects/**/*.jsonl
-  Cowork       → ~/Library/Application Support/Claude/claude-code-sessions/**/*.json
+  Cowork       → ~/Library/Application Support/Claude/local-agent-mode-sessions/**/*.jsonl
 
-Each parsed session is summarised and upserted into the session_summaries table.
+Both sources use the same JSONL format; Cowork sessions are tagged source="cowork"
+after parsing. Each parsed session is summarised and upserted into the session_summaries table.
 """
 
 import json
 import logging
-import os
-import threading
 import time
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
+from watchdog.events import FileSystemEventHandler
 
 from pricing import compute_cost
 from db import upsert_session_summary
@@ -143,70 +142,6 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
     return {
         "session_id":   session_id,
         "source":       "code",
-        "started_at":   started_at,
-        "ended_at":     ended_at,
-        "duration_sec": duration_sec,
-        "model":        model,
-        "project":      project,
-        "cost_usd":     cost_usd,
-    }
-
-
-# ── JSON parser (Cowork) ──────────────────────────────────────────────────────
-
-def parse_cowork_session(json_path: Path) -> Optional[dict]:
-    """
-    Parse a single Cowork session .json file.
-    Cowork stores sessions as a JSON object (not JSONL).
-    Field names may differ from Claude Code — we handle both known schemas.
-    """
-    try:
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
-        log.debug("Cannot read Cowork session %s: %s", json_path, exc)
-        return None
-
-    if not isinstance(data, dict):
-        return None
-
-    session_id   = data.get("sessionId") or data.get("id") or json_path.stem
-    started_at   = data.get("startedAt") or data.get("created_at") or data.get("timestamp")
-    ended_at     = data.get("endedAt")   or data.get("updated_at") or started_at
-    model        = data.get("model", "unknown")
-    project      = data.get("project") or data.get("cwd") or data.get("title")
-    if project and "/" in str(project):
-        project = Path(project).name
-
-    # Token usage
-    usage = data.get("usage") or data.get("tokens") or {}
-    input_tokens  = usage.get("input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
-    cache_read    = usage.get("cache_read_input_tokens", 0)
-    cache_write   = usage.get("cache_creation_input_tokens", 0)
-
-    if not started_at:
-        log.debug("Cowork session %s missing timestamp, skipping", json_path.name)
-        return None
-
-    try:
-        t0 = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-        t1 = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
-        duration_sec = max(int((t1 - t0).total_seconds()), 0)
-    except (ValueError, AttributeError):
-        duration_sec = 0
-
-    cost_usd = compute_cost(
-        model=model,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cache_read_tokens=cache_read,
-        cache_write_tokens=cache_write,
-    )
-
-    return {
-        "session_id":   session_id,
-        "source":       "cowork",
         "started_at":   started_at,
         "ended_at":     ended_at,
         "duration_sec": duration_sec,

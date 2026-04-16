@@ -181,6 +181,13 @@ class TestGetOAuthToken:
 # ── is_authenticated ──────────────────────────────────────────────────────────
 
 class TestIsAuthenticated:
+    @pytest.fixture(autouse=True)
+    def reset_auth_cache(self, monkeypatch):
+        """Clear the module-level _auth_cache before each test so results
+        from a prior test don't bleed through the 60 s TTL."""
+        import keychain
+        monkeypatch.setattr(keychain, "_auth_cache", None)
+
     def test_true_when_token_present(self):
         with patch("keychain.get_oauth_token", return_value="sk-ant-oat01-ok"):
             assert is_authenticated() is True

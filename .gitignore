@@ -12,6 +12,9 @@ build/
 sidecar/dist/
 sidecar/build/
 
+# Pre-built sidecar binaries (build locally via scripts/build-sidecar.sh)
+src-tauri/binaries/
+
 # Tauri
 src-tauri/target/
 src-tauri/gen/
