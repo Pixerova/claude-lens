@@ -170,7 +170,7 @@ app = FastAPI(title="Claude Lens Sidecar", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:1420", "tauri://localhost"],
+    allow_origins=["http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
