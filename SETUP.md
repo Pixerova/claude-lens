@@ -53,8 +53,8 @@ cd ~/Documents/GitHub2015/claude-lens/sidecar
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (includes pytest for local development)
+pip install -r requirements-dev.txt
 
 # Run tests to confirm everything works
 pytest tests/ -v
@@ -143,7 +143,7 @@ claude-lens/
 │   ├── poller.py             # Dynamic usage polling
 │   ├── pricing.py            # Token cost computation
 │   ├── requirements.txt
-│   └── tests/                # pytest suite (136 tests)
+│   └── tests/                # pytest suite (141 tests)
 ├── src/                      # React + TypeScript frontend
 │   ├── App.tsx               # Widget root (compact + expanded)
 │   ├── hooks/

@@ -51,16 +51,20 @@ def _get_rates(model: str) -> Optional[dict[str, float]]:
         return _pricing_override[model]
     if model in _DEFAULT_PRICING:
         return _DEFAULT_PRICING[model]
-    # Fuzzy match: strip version suffix and try again
+    # Fuzzy match: strip version suffix and find the longest matching key
     base = model.rsplit("-", 1)[0]
     if not base or base == model:
         # No suffix to strip — avoid matching everything with an empty prefix
         log.warning("No pricing found for model '%s'; cost will be 0", model)
         return None
-    for key, rates in {**_DEFAULT_PRICING, **_pricing_override}.items():
-        if key.startswith(base):
-            log.debug("Pricing fuzzy match: %s → %s", model, key)
-            return rates
+    candidates = [
+        (k, v) for k, v in {**_DEFAULT_PRICING, **_pricing_override}.items()
+        if k.startswith(base)
+    ]
+    if candidates:
+        best_key, rates = max(candidates, key=lambda kv: len(kv[0]))
+        log.debug("Pricing fuzzy match: %s → %s", model, best_key)
+        return rates
     log.warning("No pricing found for model '%s'; cost will be 0", model)
     return None
 

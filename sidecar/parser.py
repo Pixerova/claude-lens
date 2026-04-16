@@ -115,9 +115,11 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
                 total_cache_read  += usage.get("cache_read_input_tokens", 0)
                 total_cache_write += usage.get("cache_creation_input_tokens", 0)
 
-    if not session_id or not timestamps:
-        # Fall back to filename as session_id
-        session_id = session_id or jsonl_path.stem
+    if not session_id:
+        session_id = jsonl_path.stem
+
+    if not timestamps:
+        return None
 
     timestamps.sort()
     started_at = timestamps[0]

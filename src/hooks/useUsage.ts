@@ -48,10 +48,12 @@ function getPollIntervalMs(usage: UsageCurrent | null): number {
 }
 
 export function useUsage(): UseUsageResult {
-  const [usage, setUsage]     = useState<UsageCurrent | null>(null);
+  const [usage, setUsage]       = useState<UsageCurrent | null>(null);
   const [isLoading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const timerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError]       = useState<string | null>(null);
+  const timerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Server-reported poll interval (ms); null until first successful fetch.
+  const serverIntervalMsRef     = useRef<number | null>(null);
 
   const fetchUsage = useCallback(async (force = false) => {
     try {
@@ -60,6 +62,16 @@ export function useUsage(): UseUsageResult {
         : await api.getUsageCurrent();
       setUsage(data);
       setError(null);
+      // Sync client poll cadence with the server's current interval so
+      // custom thresholds in config.json are automatically respected.
+      try {
+        const health = await api.getHealth();
+        if (health.pollIntervalSec != null) {
+          serverIntervalMsRef.current = health.pollIntervalSec * 1000;
+        }
+      } catch {
+        // Health check failure is non-fatal; fall back to local table.
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch usage");
     } finally {
@@ -67,10 +79,11 @@ export function useUsage(): UseUsageResult {
     }
   }, []);
 
-  // Schedule next poll based on current utilisation
+  // Schedule next poll. Uses server interval once available, otherwise
+  // falls back to the local threshold table as a pre-fetch default.
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    const interval = getPollIntervalMs(usage);
+    const interval = serverIntervalMsRef.current ?? getPollIntervalMs(usage);
     timerRef.current = setTimeout(() => fetchUsage(false), interval);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);

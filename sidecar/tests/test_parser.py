@@ -167,4 +167,14 @@ class TestParseCodeSession:
         assert result is not None
         assert result["duration_sec"] >= 0
 
+    def test_no_timestamps_returns_none(self, tmp_path):
+        """Events with no timestamp field must return None (not IndexError)."""
+        event = {
+            "type": "user",
+            "sessionId": "s1",
+            "message": {"role": "user", "content": "hi"},
+        }
+        f = write_jsonl(tmp_path / "no-ts.jsonl", [event])
+        assert parse_code_session(f) is None
+
 
