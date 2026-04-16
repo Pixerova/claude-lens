@@ -46,7 +46,7 @@
       "binaries/sidecar"
     ],
     "macOS": {
-      "entitlements": null,
+      "entitlements": "entitlements.plist",
       "exceptionDomain": "",
       "frameworks": [],
       "minimumSystemVersion": "13.0"

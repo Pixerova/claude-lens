@@ -95,8 +95,12 @@ def load_config() -> dict:
 def _build_poll_thresholds(config: dict) -> list[tuple[float, int]]:
     """Convert config thresholds dict to the list-of-tuples format poller expects."""
     raw = config.get("poll", {}).get("thresholds", {})
-    pairs = [(v["above"], v["intervalSec"]) for v in raw.values()]
-    return sorted(pairs, reverse=True) if pairs else DEFAULT_THRESHOLDS
+    try:
+        pairs = [(v["above"], v["intervalSec"]) for v in raw.values()]
+    except (KeyError, TypeError):
+        log.warning("Invalid poll thresholds in config.json; using defaults")
+        return list(DEFAULT_THRESHOLDS)
+    return sorted(pairs, reverse=True) if pairs else list(DEFAULT_THRESHOLDS)
 
 
 # ── App state ─────────────────────────────────────────────────────────────────

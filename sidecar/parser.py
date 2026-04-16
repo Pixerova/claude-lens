@@ -170,7 +170,11 @@ def scan_all_sessions(retention_days: int = 30) -> int:
     # Claude Code
     if CLAUDE_CODE_DIR.exists():
         for jsonl_file in CLAUDE_CODE_DIR.rglob("*.jsonl"):
-            if jsonl_file.stat().st_mtime < cutoff:
+            try:
+                mtime = jsonl_file.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < cutoff:
                 code_skipped += 1
                 continue
             summary = parse_code_session(jsonl_file)
@@ -187,7 +191,11 @@ def scan_all_sessions(retention_days: int = 30) -> int:
         for jsonl_file in COWORK_DIR.rglob("*.jsonl"):
             if jsonl_file.name == "audit.jsonl":
                 continue
-            if jsonl_file.stat().st_mtime < cutoff:
+            try:
+                mtime = jsonl_file.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < cutoff:
                 cowork_skipped += 1
                 continue
             summary = parse_code_session(jsonl_file)
