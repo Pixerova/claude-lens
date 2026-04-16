@@ -107,6 +107,7 @@ def _build_poll_thresholds(config: dict) -> list[tuple[float, int]]:
 
 _config: dict = {}
 _poller: Optional[UsagePoller] = None
+_poller_task: Optional[asyncio.Task] = None
 _watcher = None
 
 
@@ -114,7 +115,7 @@ _watcher = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _config, _poller, _watcher
+    global _config, _poller, _poller_task, _watcher
 
     # 1. Config
     _config = load_config()
@@ -143,7 +144,7 @@ async def lifespan(app: FastAPI):
     #    this is safe here because lifespan runs inside FastAPI's async context.
     thresholds = _build_poll_thresholds(_config)
     _poller = UsagePoller(thresholds=thresholds)
-    asyncio.create_task(_poller.run())
+    _poller_task = asyncio.create_task(_poller.run())
 
     log.info("Claude Lens sidecar started on http://localhost:8765")
     yield
@@ -151,6 +152,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     if _poller:
         _poller.stop()
+    if _poller_task and not _poller_task.done():
+        _poller_task.cancel()
+        try:
+            await _poller_task
+        except asyncio.CancelledError:
+            pass
     if _watcher:
         _watcher.stop()
         _watcher.join()
