@@ -12,6 +12,7 @@ The token has the shape: sk-ant-oat01-...
 import json
 import subprocess
 import logging
+import time
 from typing import Optional
 
 try:
@@ -112,6 +113,19 @@ def get_oauth_token() -> Optional[str]:
     return None
 
 
+_AUTH_CACHE_TTL = 60.0  # seconds
+_auth_cache: tuple[bool, float] | None = None
+
+
 def is_authenticated() -> bool:
-    """Quick check — does a token exist?"""
-    return get_oauth_token() is not None
+    """Quick check — does a token exist? Result is cached for 60 s to avoid
+    repeated Keychain subprocess calls on every /health poll."""
+    global _auth_cache
+    now = time.monotonic()
+    if _auth_cache is not None:
+        cached_result, cached_at = _auth_cache
+        if now - cached_at < _AUTH_CACHE_TTL:
+            return cached_result
+    result = get_oauth_token() is not None
+    _auth_cache = (result, now)
+    return result

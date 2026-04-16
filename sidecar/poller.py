@@ -165,7 +165,10 @@ async def fetch_usage(token: str) -> Optional[UsageSnapshot]:
 
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 429:
-            retry_after = int(exc.response.headers.get("Retry-After", RATE_LIMIT_BACKOFF_MAX_SEC))
+            try:
+                retry_after = int(exc.response.headers.get("Retry-After", RATE_LIMIT_BACKOFF_MAX_SEC))
+            except (ValueError, TypeError):
+                retry_after = RATE_LIMIT_BACKOFF_MAX_SEC
             raise RateLimitedError(retry_after)
         elif exc.response.status_code == 401:
             log.error("OAuth token rejected (401) — may need to re-authenticate Claude Code")
@@ -275,7 +278,9 @@ class UsagePoller:
                 save_state(snapshot, self._interval_sec)
 
                 if self._on_update:
-                    self._on_update(snapshot)
+                    result = self._on_update(snapshot)
+                    if asyncio.iscoroutine(result):
+                        await result
 
                 log.info(
                     "Usage: session=%.0f%% weekly=%.0f%% → next poll in %ds",
@@ -321,5 +326,7 @@ class UsagePoller:
             )
             save_state(snapshot, self._interval_sec)
             if self._on_update:
-                self._on_update(snapshot)
+                result = self._on_update(snapshot)
+                if asyncio.iscoroutine(result):
+                    await result
         return snapshot

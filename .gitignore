@@ -19,6 +19,7 @@ src-tauri/gen/
 # Node
 node_modules/
 .next/
+.vite/
 
 # macOS
 .DS_Store
@@ -30,6 +31,9 @@ node_modules/
 # IDE
 .vscode/
 .idea/
+
+# Claude Code local project files
+.claude/
 
 # Claude Lens runtime data (lives in ~/.claudelens/, not in repo)
 *.db

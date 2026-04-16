@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -220,14 +221,21 @@ def parse_cowork_session(json_path: Path) -> Optional[dict]:
 def scan_all_sessions(retention_days: int = 30) -> int:
     """
     Walk both source directories and upsert all session summaries.
+    Only processes files modified within retention_days days.
     Called once on startup; returns count of sessions processed.
     """
+    cutoff = time.time() - retention_days * 86400
     code_count = 0
+    code_skipped = 0
     cowork_count = 0
+    cowork_skipped = 0
 
     # Claude Code
     if CLAUDE_CODE_DIR.exists():
         for jsonl_file in CLAUDE_CODE_DIR.rglob("*.jsonl"):
+            if jsonl_file.stat().st_mtime < cutoff:
+                code_skipped += 1
+                continue
             summary = parse_code_session(jsonl_file)
             if summary:
                 upsert_session_summary(**summary)
@@ -242,6 +250,9 @@ def scan_all_sessions(retention_days: int = 30) -> int:
         for jsonl_file in COWORK_DIR.rglob("*.jsonl"):
             if jsonl_file.name == "audit.jsonl":
                 continue
+            if jsonl_file.stat().st_mtime < cutoff:
+                cowork_skipped += 1
+                continue
             summary = parse_code_session(jsonl_file)
             if summary:
                 summary["source"] = "cowork"
@@ -251,7 +262,11 @@ def scan_all_sessions(retention_days: int = 30) -> int:
     else:
         log.info("Cowork Sessions directory not found (skipping): %s", COWORK_DIR)
 
-    log.info("Startup scan complete: %d Code Sessions, %d Cowork Sessions", code_count, cowork_count)
+    log.info(
+        "Startup scan complete: %d Code, %d Cowork sessions parsed; "
+        "%d Code, %d Cowork files skipped (outside %d-day retention window)",
+        code_count, cowork_count, code_skipped, cowork_skipped, retention_days,
+    )
     return code_count + cowork_count
 
 

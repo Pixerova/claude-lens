@@ -70,12 +70,22 @@ DEFAULT_CONFIG = {
 }
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge override into base, preserving nested keys not present in override."""
+    result = dict(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         try:
             user = json.loads(CONFIG_PATH.read_text())
-            # Shallow merge: user values override defaults
-            merged = {**DEFAULT_CONFIG, **user}
+            merged = _deep_merge(DEFAULT_CONFIG, user)
             return merged
         except Exception as exc:
             log.warning("Could not load config.json (%s), using defaults", exc)
@@ -125,7 +135,8 @@ async def lifespan(app: FastAPI):
     # 6. File watchers
     _watcher = start_watchers()
 
-    # 7. Usage poller
+    # 7. Usage poller — create_task requires a running event loop;
+    #    this is safe here because lifespan runs inside FastAPI's async context.
     thresholds = _build_poll_thresholds(_config)
     _poller = UsagePoller(thresholds=thresholds)
     asyncio.create_task(_poller.run())
@@ -148,9 +159,9 @@ app = FastAPI(title="Claude Lens Sidecar", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://127.0.0.1:1420", "tauri://localhost"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 

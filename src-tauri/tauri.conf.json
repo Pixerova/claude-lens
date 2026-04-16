@@ -25,12 +25,10 @@
         "skipTaskbar": true,
         "visible": false,
         "shadow": true,
-        "x": 1200,
-        "y": 80
       }
     ],
 "security": {
-      "csp": null
+      "csp": "default-src 'self'; connect-src http://127.0.0.1:8765; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
     },
     "macOSPrivateApi": true
   },

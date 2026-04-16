@@ -62,7 +62,7 @@ export function useSessions(days = 7, limit = 20): UseSessionsResult {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [sessions, fetchAll]);
+  }, [fetchAll]);
 
   // Initial fetch
   useEffect(() => {
