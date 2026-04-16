@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# PyInstaller
+sidecar/dist/
+sidecar/build/
+
+# Pre-built sidecar binaries (build locally via scripts/build-sidecar.sh)
+src-tauri/binaries/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Node
+node_modules/
+.next/
+.vite/
+
+# macOS
+.DS_Store
+
+# Env
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code local project files
+.claude/
+
+# Claude Lens runtime data (lives in ~/.claudelens/, not in repo)
+*.db
+state.json
