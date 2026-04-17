@@ -13,13 +13,13 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIDECAR_DIR="$REPO_ROOT/sidecar"
 BINARIES_DIR="$REPO_ROOT/src-tauri/binaries"
 
-# Detect target triple
-ARCH="$(uname -m)"
-case "$ARCH" in
-  arm64)  TRIPLE="aarch64-apple-darwin" ;;
-  x86_64) TRIPLE="x86_64-apple-darwin" ;;
-  *)      echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
-esac
+# Use the Rust host triple — this determines which binary Tauri bundles,
+# and may differ from uname -m (e.g. x86_64 Rust toolchain under Rosetta).
+TRIPLE="$(~/.cargo/bin/rustc -vV 2>/dev/null | awk '/^host:/ {print $2}')"
+if [ -z "$TRIPLE" ]; then
+  echo "Could not determine Rust host triple. Is Rust installed?" >&2
+  exit 1
+fi
 
 echo "Building sidecar for $TRIPLE..."
 
