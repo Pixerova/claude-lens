@@ -1,27 +1,37 @@
 /**
  * SessionList.tsx — Scrollable list of recent sessions.
  *
- * Each row: % of week's tracked cost · source badge · project/model · duration · cost · relative time
+ * Each row: % of weekly plan · source badge · project / conversation label
  * Order: most recent first.
+ *
+ * Cowork sessions use the conversation title when available, falling back
+ * to a formatted timestamp. Cost column removed — not meaningful on MAX plan.
  */
 
 import React from "react";
 import { type Session } from "../lib/api";
-import { formatDuration, formatCost } from "../hooks/useSessions";
 
 interface SessionListProps {
   sessions: Session[];
   isLoading: boolean;
 }
 
+/** Format a cowork session as "Apr 14 · 3:30 PM". */
+function coworkLabel(startedAt: string): string {
+  const d = new Date(startedAt);
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${date} · ${time}`;
+}
+
 function SourceBadge({ source }: { source: "code" | "cowork" }) {
   const isCode = source === "code";
   return (
     <span
-      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide uppercase leading-none shrink-0 ${
+      className={`inline-flex items-center font-mono text-[8px] font-bold tracking-[0.04em] uppercase px-[4px] py-[1px] rounded-[3px] leading-none shrink-0 ${
         isCode
-          ? "bg-primary/20 text-primary"
-          : "bg-purple-500/20 text-purple-400"
+          ? "bg-[rgba(41,121,255,0.2)] text-[#6eb0ff]"
+          : "bg-[rgba(124,92,191,0.2)] text-[#b89ef0]"
       }`}
     >
       {isCode ? "Code" : "Cowork"}
@@ -29,21 +39,12 @@ function SourceBadge({ source }: { source: "code" | "cowork" }) {
   );
 }
 
-function PctPill({ pct }: { pct: number }) {
-  const display = pct < 0.005 ? "< 1%" : `${Math.round(pct * 100)}%`;
-  return (
-    <span className="w-9 shrink-0 text-right text-[10px] font-semibold text-gray-400 tabular-nums">
-      {display}
-    </span>
-  );
-}
-
 export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading }) => {
   if (isLoading) {
     return (
-      <div className="space-y-2 mt-2">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-10 rounded-lg bg-white/5 animate-pulse" />
+      <div className="space-y-[4px] mt-1">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-[16px] rounded-[4px] bg-white/[0.07] animate-pulse" style={{ animationDelay: `${i * 0.08}s` }} />
         ))}
       </div>
     );
@@ -51,46 +52,51 @@ export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading })
 
   if (sessions.length === 0) {
     return (
-      <p className="mt-4 text-center text-xs text-gray-500">
-        No sessions found in the last 7 days.
+      <p className="font-mono text-[10px] text-white/60 text-center py-3">
+        No sessions in the last 7 days.
       </p>
     );
   }
 
   return (
-    <div className="mt-1 space-y-1 max-h-52 overflow-y-auto pr-1">
+    <div
+      className="max-h-[168px] overflow-y-auto"
+      style={{ scrollbarWidth: "thin", scrollbarColor: "#333 transparent" }}
+    >
       {/* Column headers */}
-      <div className="flex items-center gap-2 px-2.5 mb-0.5">
-        <span className="w-9 shrink-0 text-right text-[9px] text-gray-600 uppercase tracking-wide">%</span>
-        <span className="flex-1 text-[9px] text-gray-600 uppercase tracking-wide">Project</span>
-        <span className="text-[9px] text-gray-600 uppercase tracking-wide shrink-0">Duration</span>
-        <span className="text-[9px] text-gray-600 uppercase tracking-wide shrink-0 w-12 text-right">Cost</span>
+      <div className="flex items-center gap-[5px] px-[4px] pb-[4px]">
+        <span className="font-mono text-[8px] font-bold text-white/60 uppercase tracking-[0.06em] w-[24px] text-right shrink-0">%</span>
+        <span className="font-mono text-[8px] font-bold text-white/60 uppercase tracking-[0.06em] w-[46px] shrink-0">Src</span>
+        <span className="font-mono text-[8px] font-bold text-white/60 uppercase tracking-[0.06em] flex-1 min-w-0">Session</span>
       </div>
 
       {sessions.map((s) => {
-        const label = s.project ?? s.model ?? s.source;
+        // Cowork: conversation title when available, otherwise formatted timestamp.
+        // Code: project folder name, falling back to model.
+        const label = s.source === "cowork"
+          ? (s.title ?? coworkLabel(s.startedAt))
+          : (s.project ?? s.model ?? s.source);
+
+        const pct = s.pctOfWeek < 0.005
+          ? "< 1%"
+          : `${Math.round(s.pctOfWeek * 100)}%`;
+
         return (
           <div
             key={s.sessionId}
-            className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-white/5 hover:bg-white/8 transition-colors"
+            className="flex items-center gap-[5px] px-[4px] py-[2px] rounded-[4px] hover:bg-white/[0.04] transition-colors"
           >
-            <PctPill pct={s.pctOfWeek} />
-            <SourceBadge source={s.source} />
-
-            {/* Project / model label */}
+            <span className="font-mono text-[9px] text-white/65 tabular-nums w-[24px] text-right shrink-0 leading-none">
+              {pct}
+            </span>
+            <div className="w-[46px] shrink-0 flex items-center">
+              <SourceBadge source={s.source} />
+            </div>
             <span
-              className="flex-1 min-w-0 text-xs text-gray-300 truncate"
+              className="flex-1 min-w-0 text-[10px] font-medium text-white truncate leading-none"
               title={label ?? undefined}
             >
               {label}
-            </span>
-
-            {/* Stats */}
-            <span className="text-[10px] text-gray-400 shrink-0">
-              {formatDuration(s.durationSec)}
-            </span>
-            <span className="text-[10px] text-gray-500 shrink-0 w-12 text-right tabular-nums">
-              {formatCost(s.costUsd)}
             </span>
           </div>
         );

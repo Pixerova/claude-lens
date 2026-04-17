@@ -6,22 +6,40 @@
 
 ## What it is
 
-Claude Lens is a macOS menu bar app and floating overlay widget for Claude Pro subscribers. It shows your live plan limits (current session and weekly), breaks down usage by source (Claude Code, Cowork, browser chat), and surfaces AI-powered suggestions so you make the most of every reset window.
+Claude Lens is a macOS menu bar app and floating overlay widget for Claude Pro subscribers. It shows your live plan limits (current session and weekly), breaks down usage by source (Claude Code vs Cowork), and surfaces AI-powered suggestions so you make the most of every reset window.
 
 Most Claude usage monitors answer: *"How much have I spent?"* Claude Lens answers: *"How much do I have left — and what should I do with it?"*
 
-## Features
+## What it shows
 
-- **Live plan limits** — current session % and weekly % with countdown to reset, pulled from the Anthropic OAuth API
-- **Dual-surface UX** — ambient menu bar icon that reflects your usage level, plus a floating overlay for the full dashboard
-- **Session breakdown** — usage by source (Claude Code / Cowork / other), duration, and estimated cost
-- **Smart suggestions** — rule-based triggers + Claude-powered recommendations when your usage is low or a reset is approaching
-- **Dynamic polling** — checks more frequently as you approach limits, backs off when usage is low
-- **Fully local** — reads from your macOS Keychain and local session files; nothing leaves your machine
+**Plan utilization**
+- Current session % and weekly % with time until reset, pulled directly from the Anthropic OAuth API
+- Visual warning states as limits approach (normal → amber at 80% → critical at 90%)
+- Stale indicator when the API hasn't been reached recently
+
+**7-day breakdown**
+- Share of tracked usage by source — Claude Code vs Cowork — as a percentage
+- Each source's estimated contribution to your weekly plan utilization
+- Daily usage distribution over the last 7 days, normalized by source
+- Top project by activity this week
+
+**Session list**
+- Sessions from the last 7 days with each session's share of your weekly plan
+- Code sessions labeled by project folder; Cowork sessions labeled by conversation title
+
+**What it intentionally does not show**
+- Cost in USD — not meaningful on MAX plan; absolute dollar values are near-zero and misleading. Plan consumption is expressed as utilization percentages instead.
+- Session duration — wall-clock elapsed time is not correlated with actual plan consumption and would encourage optimizing the wrong thing.
+
+## How it works
+
+Claude Lens reads your live plan limits from the Anthropic OAuth API (via the token already stored in your macOS Keychain by Claude Code — no setup required). It parses local session files from Claude Code and Cowork to attribute that usage between sources. Everything stays on your machine.
+
+The poll interval adapts dynamically: checking every minute when you're near a limit, backing off to once an hour when usage is low.
 
 ## Status
 
-🚧 In development
+🚧 In active development
 
 ## Tech stack
 

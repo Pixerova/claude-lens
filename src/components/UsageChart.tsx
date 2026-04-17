@@ -1,8 +1,13 @@
 /**
- * UsageChart.tsx — Stacked bar chart of daily cost by source (7-day view).
+ * UsageChart.tsx — Stacked bar chart for daily metrics by source (7-day view).
  *
- * Uses Recharts BarChart. Code sessions = primary blue, Cowork = purple.
- * Shown only in expanded view.
+ * Generic over the value being charted. Data is passed as a flat array of
+ * { day, source, value } points; the chart aggregates into stacked bars.
+ *
+ * unit="percent"  — values are already normalised to % of 7-day total (0–100).
+ *                   Tooltip shows "X.X%". Bars are always visible regardless of
+ *                   absolute cost magnitude (important for MAX plan users).
+ * unit="cost"     — values are USD; tooltip shows "$X.XXX".
  */
 
 import React, { useMemo } from "react";
@@ -14,41 +19,47 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { type ChartPoint } from "../lib/api";
+
+export interface ChartDataPoint {
+  day: string;              // YYYY-MM-DD
+  source: "code" | "cowork";
+  value: number;            // costUsd or durationSec depending on unit
+}
 
 interface UsageChartProps {
-  data: ChartPoint[];
+  data: ChartDataPoint[];
+  unit: "cost" | "percent";
+  emptyLabel?: string;
 }
 
 interface DayEntry {
-  day: string;       // "Mon", "Tue", etc.
+  day: string;   // "Mon", "Tue", etc.
   code: number;
   cowork: number;
 }
 
-const PRIMARY  = "#4B9EFF";
-const PURPLE   = "#A78BFA";
-const GRAY_500 = "#6b7280";
-const GRAY_700 = "#374151";
+const CODE_BLUE     = "#2979ff";
+const COWORK_PURPLE = "#7c5cbf";
+const AXIS_COLOR    = "rgba(255,255,255,0.4)";
+const TOOLTIP_BG    = "#1a1a1c";
+const TOOLTIP_BORDER = "#374151";
 
 function shortDay(isoDay: string): string {
-  const d = new Date(isoDay + "T12:00:00");   // noon avoids TZ day-flip
+  const d = new Date(isoDay + "T12:00:00");  // noon avoids TZ day-flip
   return d.toLocaleDateString("en-US", { weekday: "short" });
 }
 
-export const UsageChart: React.FC<UsageChartProps> = ({ data }) => {
+export const UsageChart: React.FC<UsageChartProps> = ({ data, unit, emptyLabel }) => {
   const chartData = useMemo<DayEntry[]>(() => {
-    // Build a map: day → { code, cowork }
     const map = new Map<string, DayEntry>();
     data.forEach((pt) => {
       if (!map.has(pt.day)) {
         map.set(pt.day, { day: shortDay(pt.day), code: 0, cowork: 0 });
       }
       const entry = map.get(pt.day)!;
-      if (pt.source === "code")   entry.code   += pt.costUsd;
-      if (pt.source === "cowork") entry.cowork += pt.costUsd;
+      if (pt.source === "code")   entry.code   += pt.value;
+      if (pt.source === "cowork") entry.cowork += pt.value;
     });
-    // Sort by date ascending
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
@@ -56,38 +67,43 @@ export const UsageChart: React.FC<UsageChartProps> = ({ data }) => {
 
   if (chartData.length === 0) {
     return (
-      <p className="text-center text-xs text-gray-500 py-4">
-        No session cost data yet.
+      <p className="font-mono text-center text-[10px] text-white/30 py-4">
+        {emptyLabel ?? "No data yet."}
       </p>
     );
   }
 
+  const tooltipFormatter = (value: number, name: string): [string, string] => {
+    const label = name.charAt(0).toUpperCase() + name.slice(1);
+    const formatted = unit === "cost"
+      ? `$${value.toFixed(3)}`
+      : `${value.toFixed(1)}%`;
+    return [formatted, label];
+  };
+
   return (
-    <ResponsiveContainer width="100%" height={90}>
-      <BarChart data={chartData} barSize={10} barCategoryGap="30%">
+    <ResponsiveContainer width="100%" height={56}>
+      <BarChart data={chartData} barSize={12} barCategoryGap="30%">
         <XAxis
           dataKey="day"
-          tick={{ fill: GRAY_500, fontSize: 9 }}
+          tick={{ fill: AXIS_COLOR, fontSize: 8 }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis hide />
         <Tooltip
           contentStyle={{
-            background: "#242424",
-            border: `1px solid ${GRAY_700}`,
+            background: TOOLTIP_BG,
+            border: `1px solid ${TOOLTIP_BORDER}`,
             borderRadius: 6,
             fontSize: 11,
-            color: "#e5e7eb",
+            color: "#ffffff",
           }}
-          formatter={(value: number, name: string) => [
-            `$${value.toFixed(3)}`,
-            name.charAt(0).toUpperCase() + name.slice(1),
-          ]}
+          formatter={tooltipFormatter}
           cursor={{ fill: "rgba(255,255,255,0.04)" }}
         />
-        <Bar dataKey="code"   stackId="a" fill={PRIMARY} radius={[0, 0, 2, 2]} name="Code" />
-        <Bar dataKey="cowork" stackId="a" fill={PURPLE}  radius={[2, 2, 0, 0]} name="Cowork" />
+        <Bar dataKey="code"   stackId="a" fill={CODE_BLUE}     radius={[0, 0, 2, 2]} name="Code" />
+        <Bar dataKey="cowork" stackId="a" fill={COWORK_PURPLE} radius={[2, 2, 0, 0]} name="Cowork" />
       </BarChart>
     </ResponsiveContainer>
   );

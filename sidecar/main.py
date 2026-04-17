@@ -18,7 +18,7 @@ import json
 import logging
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -135,6 +135,9 @@ async def lifespan(app: FastAPI):
     # 5. Startup session scan (background — don't block server start)
     def _scan():
         scan_all_sessions(_config["retentionDays"])
+        anomaly = db.check_zero_cost_anomaly()
+        if anomaly:
+            log.error("Zero-cost anomaly: %s", anomaly)
     threading.Thread(target=_scan, daemon=True).start()
 
     # 6. File watchers
@@ -289,25 +292,33 @@ def sessions(limit: int = Query(default=20, ge=1, le=200)):
     Recent session summaries, newest first.
     Each row includes pctOfWeek: fraction of this week's total tracked cost.
     """
-    rows      = db.get_recent_sessions(limit)
-    week_cost = db.get_week_total_cost(days=7)
+    rows         = db.get_recent_sessions(limit)
+    week_cost    = db.get_week_total_cost(days=7)
+    week_cutoff  = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
-    def _pct(cost: float) -> float:
-        if week_cost <= 0:
+    def _pct(started_at: str, cost: float) -> float:
+        # Sessions outside the 7-day window are not part of this week's total;
+        # giving them a non-zero pct would cause the list to sum above 100%.
+        if week_cost <= 0 or started_at < week_cutoff:
             return 0.0
-        return round(cost / week_cost, 4)   # 0–1, 4 dp is plenty
+        return round(cost / week_cost, 4)
 
     return [
         {
-            "sessionId":   r["session_id"],
-            "source":      r["source"],
-            "startedAt":   r["started_at"],
-            "endedAt":     r["ended_at"],
-            "durationSec": r["duration_sec"],
-            "model":       r["model"],
-            "project":     r["project"],
-            "costUsd":     r["cost_usd"],
-            "pctOfWeek":   _pct(r["cost_usd"]),
+            "sessionId":        r["session_id"],
+            "source":           r["source"],
+            "startedAt":        r["started_at"],
+            "endedAt":          r["ended_at"],
+            "durationSec":      r["duration_sec"],
+            "model":            r["model"],
+            "project":          r["project"],
+            "costUsd":          r["cost_usd"],
+            "title":            r["title"],
+            "inputTokens":      r["input_tokens"],
+            "outputTokens":     r["output_tokens"],
+            "cacheReadTokens":  r["cache_read_tokens"],
+            "cacheWriteTokens": r["cache_write_tokens"],
+            "pctOfWeek":        _pct(r["started_at"], r["cost_usd"]),
         }
         for r in rows
     ]

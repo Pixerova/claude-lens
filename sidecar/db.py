@@ -8,11 +8,14 @@ Tables:
   - suggestion_history    : log of suggestions shown to the user
 """
 
+import logging
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -56,15 +59,20 @@ CREATE TABLE IF NOT EXISTS plan_usage_snapshots (
 );
 
 CREATE TABLE IF NOT EXISTS session_summaries (
-    session_id       TEXT PRIMARY KEY,
-    source           TEXT NOT NULL CHECK(source IN ('code', 'cowork')),
-    started_at       TEXT NOT NULL,
-    ended_at         TEXT NOT NULL,
-    duration_sec     INTEGER NOT NULL,
-    model            TEXT NOT NULL,
-    project          TEXT,
-    cost_usd         REAL NOT NULL,
-    last_parsed      TEXT NOT NULL
+    session_id         TEXT PRIMARY KEY,
+    source             TEXT NOT NULL CHECK(source IN ('code', 'cowork')),
+    started_at         TEXT NOT NULL,
+    ended_at           TEXT NOT NULL,
+    duration_sec       INTEGER NOT NULL,
+    model              TEXT NOT NULL,
+    project            TEXT,
+    cost_usd           REAL NOT NULL,
+    title              TEXT,
+    input_tokens       INTEGER NOT NULL DEFAULT 0,
+    output_tokens      INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
+    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+    last_parsed        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS suggestion_history (
@@ -82,10 +90,28 @@ CREATE INDEX IF NOT EXISTS idx_sessions_source  ON session_summaries(source);
 """
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add new columns to existing tables without touching existing data."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(session_summaries)")}
+    additions = [
+        ("title",              "TEXT"),
+        ("input_tokens",       "INTEGER NOT NULL DEFAULT 0"),
+        ("output_tokens",      "INTEGER NOT NULL DEFAULT 0"),
+        ("cache_read_tokens",  "INTEGER NOT NULL DEFAULT 0"),
+        ("cache_write_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    for col, typedef in additions:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE session_summaries ADD COLUMN {col} {typedef}")
+            log.info("Migration: added column %s to session_summaries", col)
+    conn.commit()
+
+
 def init_db() -> None:
     """Create tables and indexes if they don't exist. Safe to call on every startup."""
     with _get_conn() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
 
 
 # ── Writers ──────────────────────────────────────────────────────────────────
@@ -119,6 +145,11 @@ def upsert_session_summary(
     model: str,
     project: Optional[str],
     cost_usd: float,
+    title: Optional[str] = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
 ) -> None:
     """Insert or replace a session summary (re-parse overwrites previous record)."""
     now = datetime.now(timezone.utc).isoformat()
@@ -128,18 +159,29 @@ def upsert_session_summary(
                 """
                 INSERT INTO session_summaries
                     (session_id, source, started_at, ended_at, duration_sec,
-                     model, project, cost_usd, last_parsed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     model, project, cost_usd,
+                     title, input_tokens, output_tokens,
+                     cache_read_tokens, cache_write_tokens,
+                     last_parsed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
-                    ended_at     = excluded.ended_at,
-                    duration_sec = excluded.duration_sec,
-                    model        = excluded.model,
-                    project      = excluded.project,
-                    cost_usd     = excluded.cost_usd,
-                    last_parsed  = excluded.last_parsed
+                    ended_at           = excluded.ended_at,
+                    duration_sec       = excluded.duration_sec,
+                    model              = excluded.model,
+                    project            = excluded.project,
+                    cost_usd           = excluded.cost_usd,
+                    title              = excluded.title,
+                    input_tokens       = excluded.input_tokens,
+                    output_tokens      = excluded.output_tokens,
+                    cache_read_tokens  = excluded.cache_read_tokens,
+                    cache_write_tokens = excluded.cache_write_tokens,
+                    last_parsed        = excluded.last_parsed
                 """,
                 (session_id, source, started_at, ended_at, duration_sec,
-                 model, project, cost_usd, now),
+                 model, project, cost_usd,
+                 title, input_tokens, output_tokens,
+                 cache_read_tokens, cache_write_tokens,
+                 now),
             )
 
 
@@ -196,11 +238,13 @@ def get_snapshot_history(days: int = 7) -> list[sqlite3.Row]:
         ).fetchall()
 
 
-def get_recent_sessions(limit: int = 20) -> list[sqlite3.Row]:
+def get_recent_sessions(limit: int = 20, days: int = 7) -> list[sqlite3.Row]:
+    """Return sessions that overlap the last `days` days (ended_at within or after the window)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with _get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM session_summaries ORDER BY started_at DESC LIMIT ?",
-            (limit,),
+            "SELECT * FROM session_summaries WHERE ended_at > ? ORDER BY started_at DESC LIMIT ?",
+            (cutoff, limit),
         ).fetchall()
 
 
@@ -322,7 +366,29 @@ def get_week_total_cost(days: int = 7) -> float:
         ).fetchone()[0])
 
 
-# ── Health info ──────────────────────────────────────────────────────────────
+# ── Anomaly checks ───────────────────────────────────────────────────────────
+
+def check_zero_cost_anomaly() -> Optional[str]:
+    """
+    Return an error string if sessions exist but every one has cost_usd = 0.
+    This indicates model names are not matching the pricing table.
+    Returns None when costs look healthy.
+    """
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(cost_usd), 0) AS total "
+            "FROM session_summaries"
+        ).fetchone()
+    n, total = int(row["n"]), float(row["total"])
+    if n > 0 and total == 0.0:
+        return (
+            f"{n} session(s) in database but total cost_usd = 0.0 — "
+            "model names may not be recognised by the pricing table"
+        )
+    return None
+
+
+# ── Health info ───────────────────────────────────────────────────────────────
 
 def get_db_stats() -> dict:
     with _get_conn() as conn:

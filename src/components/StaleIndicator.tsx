@@ -1,15 +1,14 @@
 /**
- * StaleIndicator.tsx — Subtle badge shown when usage data is stale.
+ * StaleIndicator.tsx — Banner shown when usage data is stale.
  *
- * Shown when `isStale` is true (sidecar hasn't been able to reach
- * the API recently) or when the sidecar itself is unreachable.
+ * Displayed below the usage tiles in both collapsed and expanded views.
  */
 
 import React from "react";
 
 interface StaleIndicatorProps {
   isStale: boolean;
-  recordedAt?: string;  // ISO 8601 — shown as "as of HH:MM"
+  recordedAt?: string;  // ISO 8601 — shown as "last updated HH:MM"
   error?: string | null;
 }
 
@@ -20,7 +19,7 @@ export const StaleIndicator: React.FC<StaleIndicatorProps> = ({
 }) => {
   if (!isStale && !error) return null;
 
-  let label = "Data may be stale";
+  let label = "Data stale";
   if (error) {
     label = "Sidecar unreachable";
   } else if (recordedAt) {
@@ -28,13 +27,13 @@ export const StaleIndicator: React.FC<StaleIndicatorProps> = ({
       hour: "numeric",
       minute: "2-digit",
     });
-    label = `Last updated ${t}`;
+    label = `Data stale · last updated ${t}`;
   }
 
   return (
-    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber/10 border border-amber/20 w-fit">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
-      <span className="text-[10px] text-amber leading-none">{label}</span>
+    <div className="flex items-center gap-[6px] mx-[10px] my-2 px-[9px] py-[5px] rounded-[6px] bg-[rgba(255,210,0,0.08)] border border-[rgba(255,210,0,0.20)]">
+      <span className="w-[6px] h-[6px] rounded-full bg-[#ffd200] animate-pulse shrink-0" />
+      <span className="font-mono text-[9px] font-semibold text-[#ffd200] leading-none">{label}</span>
     </div>
   );
 };
