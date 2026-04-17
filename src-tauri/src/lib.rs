@@ -25,10 +25,13 @@ fn start_sidecar(app: &AppHandle) {
     // In dev mode we spawn the Python process directly instead (see SETUP.md).
     match shell.sidecar("sidecar") {
         Ok(cmd) => {
-            let _ = cmd.spawn();
+            match cmd.spawn() {
+                Ok(_) => eprintln!("[claude-lens] Sidecar spawned OK"),
+                Err(e) => eprintln!("[claude-lens] Sidecar spawn failed: {e}"),
+            }
         }
         Err(e) => {
-            eprintln!("[claude-lens] Failed to start sidecar: {e}");
+            eprintln!("[claude-lens] Failed to create sidecar command: {e}");
         }
     }
 }
