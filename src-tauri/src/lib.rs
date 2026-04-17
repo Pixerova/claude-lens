@@ -7,14 +7,18 @@
 //   - Global hotkey: Option+Space to show/hide the overlay window
 //   - Window management: always-on-top, position persistence
 
+use std::sync::Mutex;
 use tauri::{
     AppHandle, Manager, Runtime,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     menu::{Menu, MenuItem},
     image::Image,
 };
+use tauri_plugin_shell::process::CommandChild;
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+
+struct SidecarHandle(Mutex<Option<CommandChild>>);
 
 // ── Sidecar ───────────────────────────────────────────────────────────────────
 
@@ -26,7 +30,12 @@ fn start_sidecar(app: &AppHandle) {
     match shell.sidecar("sidecar") {
         Ok(cmd) => {
             match cmd.spawn() {
-                Ok(_) => eprintln!("[claude-lens] Sidecar spawned OK"),
+                Ok((_rx, child)) => {
+                    if let Some(handle) = app.try_state::<SidecarHandle>() {
+                        *handle.0.lock().unwrap() = Some(child);
+                    }
+                    eprintln!("[claude-lens] Sidecar spawned OK");
+                }
                 Err(e) => eprintln!("[claude-lens] Sidecar spawn failed: {e}"),
             }
         }
@@ -65,6 +74,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // 1. Start the Python sidecar
+            app.manage(SidecarHandle(Mutex::new(None)));
             start_sidecar(app.handle());
 
             // Apply macOS vibrancy (under-window blur effect)
@@ -114,6 +124,15 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Claude Lens");
+        .build(tauri::generate_context!())
+        .expect("error while building Claude Lens")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(handle) = app.try_state::<SidecarHandle>() {
+                    if let Some(child) = handle.0.lock().unwrap().take() {
+                        let _ = child.kill();
+                    }
+                }
+            }
+        });
 }
