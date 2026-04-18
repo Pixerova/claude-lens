@@ -2,7 +2,7 @@
  * App.tsx — Claude Lens floating widget root.
  *
  * Two views:
- *  • Collapsed — 2×2 tile grid (session, weekly, expand, suggest) + optional weekly cost footer
+ *  • Collapsed — 2×2 tile grid (session, weekly, expand, suggest)
  *  • Expanded  — full-size 2-tile header, stats cards, top project, source breakdown,
  *                daily cost chart, session list, suggestion footer
  *
@@ -14,7 +14,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { useUsage }    from "./hooks/useUsage";
-import { useSessions, formatCost, totalCostUsd } from "./hooks/useSessions";
+import { useSessions, totalCostUsd } from "./hooks/useSessions";
 import { UsageTile }        from "./components/UsageTile";
 import { StaleIndicator }   from "./components/StaleIndicator";
 import { SessionList }      from "./components/SessionList";
@@ -207,13 +207,6 @@ export default function App() {
     ? "bg-[#222] border border-[#333]"
     : `bg-gradient-to-br ${logoGradient[level]}`;
 
-  // Footer cost color mirrors the overall level
-  const footerCostColor: Record<typeof level, string> = {
-    normal: "text-primary",
-    amber:  "text-amber",
-    danger: "text-danger",
-  };
-
   return (
     <div className="min-h-screen flex items-start justify-center p-2 bg-transparent">
       <div className="w-full rounded-[14px] bg-app-bg border border-white/[0.09] shadow-2xl shadow-black/60 overflow-hidden">
@@ -307,20 +300,7 @@ export default function App() {
               <StaleIndicator isStale recordedAt={usage.recordedAt} />
             )}
 
-            {/* Footer — weekly cost. Hidden when spend is under $10 to avoid showing
-                noise for light usage days; spacing is preserved either way. */}
-            {localCostWeek >= 10 ? (
-              <div className="px-2.5 pt-[5px] pb-[9px]">
-                <div className={`font-mono text-[12px] font-semibold ${footerCostColor[level]}`}>
-                  {formatCost(localCostWeek)}
-                </div>
-                <div className="font-mono text-[9px] text-white/40 uppercase tracking-[0.07em] mt-0.5">
-                  this week
-                </div>
-              </div>
-            ) : (
-              <div className="pb-[9px]" />
-            )}
+            <div className="pb-[9px]" />
           </>
         )}
 
