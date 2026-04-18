@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from parser import parse_code_session
+from parser import parse_code_session, _extract_title
 from conftest import write_jsonl, make_code_events
 
 
@@ -177,4 +177,88 @@ class TestParseCodeSession:
         f = write_jsonl(tmp_path / "no-ts.jsonl", [event])
         assert parse_code_session(f) is None
 
+    def test_synthetic_model_not_stored(self, tmp_path):
+        """<synthetic> model label must be skipped; real model should win."""
+        t0 = "2026-04-10T09:00:00+00:00"
+        t1 = "2026-04-10T09:10:00+00:00"
+        t2 = "2026-04-10T09:20:00+00:00"
+        events = [
+            {"type": "user", "sessionId": "s1", "timestamp": t0,
+             "message": {"role": "user", "content": "hello"}},
+            # synthetic event first — should be ignored
+            {"type": "assistant", "sessionId": "s1", "timestamp": t1,
+             "message": {"role": "assistant", "model": "<synthetic>",
+                         "content": "...",
+                         "usage": {"input_tokens": 0, "output_tokens": 0,
+                                   "cache_read_input_tokens": 0,
+                                   "cache_creation_input_tokens": 0}}},
+            # real model event second — should win
+            {"type": "assistant", "sessionId": "s1", "timestamp": t2,
+             "message": {"role": "assistant", "model": "claude-sonnet-4-6",
+                         "content": "reply",
+                         "usage": {"input_tokens": 100, "output_tokens": 50,
+                                   "cache_read_input_tokens": 0,
+                                   "cache_creation_input_tokens": 0}}},
+        ]
+        f = write_jsonl(tmp_path / "synthetic.jsonl", events)
+        result = parse_code_session(f)
+        assert result is not None
+        assert result["model"] == "claude-sonnet-4-6"
+
+    def test_only_synthetic_model_stays_unknown(self, tmp_path):
+        """If only <synthetic> events exist, model should remain 'unknown'."""
+        t0 = "2026-04-10T09:00:00+00:00"
+        t1 = "2026-04-10T09:10:00+00:00"
+        events = [
+            {"type": "user", "sessionId": "s1", "timestamp": t0,
+             "message": {"role": "user", "content": "hello"}},
+            {"type": "assistant", "sessionId": "s1", "timestamp": t1,
+             "message": {"role": "assistant", "model": "<synthetic>",
+                         "content": "...",
+                         "usage": {"input_tokens": 0, "output_tokens": 0,
+                                   "cache_read_input_tokens": 0,
+                                   "cache_creation_input_tokens": 0}}},
+        ]
+        f = write_jsonl(tmp_path / "only-synthetic.jsonl", events)
+        result = parse_code_session(f)
+        assert result is not None
+        assert result["model"] == "unknown"
+
+
+class TestExtractTitle:
+
+    def test_plain_string(self):
+        assert _extract_title("Fix the login bug") == "Fix the login bug"
+
+    def test_plain_string_truncated_to_200(self):
+        long = "x" * 300
+        result = _extract_title(long)
+        assert result == "x" * 200
+
+    def test_content_block_array_extracts_text(self):
+        content = [
+            {"type": "text", "text": "Hello world"},
+            {"type": "tool_use", "id": "tu_1", "name": "Read"},
+        ]
+        assert _extract_title(content) == "Hello world"
+
+    def test_content_block_array_joins_multiple_text_blocks(self):
+        content = [
+            {"type": "text", "text": "Part one"},
+            {"type": "text", "text": "part two"},
+        ]
+        assert _extract_title(content) == "Part one part two"
+
+    def test_empty_string_returns_none(self):
+        assert _extract_title("") is None
+
+    def test_empty_list_returns_none(self):
+        assert _extract_title([]) is None
+
+    def test_non_text_blocks_only_returns_none(self):
+        content = [{"type": "tool_use", "id": "tu_1", "name": "Bash"}]
+        assert _extract_title(content) is None
+
+    def test_unsupported_type_returns_none(self):
+        assert _extract_title(42) is None
 

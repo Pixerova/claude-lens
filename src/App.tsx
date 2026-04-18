@@ -4,7 +4,7 @@
  * Two views:
  *  • Collapsed — 2×2 tile grid (session, weekly, expand, suggest) + optional weekly cost footer
  *  • Expanded  — full-size 2-tile header, stats cards, top project, source breakdown,
- *                daily cost chart, daily duration chart, session list, suggestion footer
+ *                daily cost chart, session list, suggestion footer
  *
  * Drag region: header row (data-tauri-drag-region via onMouseDown).
  * Theme:       solid dark (#0c0c0e) with colored usage tiles.

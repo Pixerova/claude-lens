@@ -239,11 +239,11 @@ def get_snapshot_history(days: int = 7) -> list[sqlite3.Row]:
 
 
 def get_recent_sessions(limit: int = 20, days: int = 7) -> list[sqlite3.Row]:
-    """Return sessions that overlap the last `days` days (ended_at within or after the window)."""
+    """Return sessions that started within the last `days` days."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with _get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM session_summaries WHERE ended_at > ? ORDER BY started_at DESC LIMIT ?",
+            "SELECT * FROM session_summaries WHERE started_at > ? ORDER BY started_at DESC LIMIT ?",
             (cutoff, limit),
         ).fetchall()
 
@@ -380,7 +380,9 @@ def check_zero_cost_anomaly() -> Optional[str]:
             "FROM session_summaries"
         ).fetchone()
     n, total = int(row["n"]), float(row["total"])
-    if n > 0 and total == 0.0:
+    # SQLite stores exact zero when pricing fails (no floating-point accumulation),
+    # so exact equality is safe here — not a float comparison bug.
+    if n > 0 and total < 1e-9:
         return (
             f"{n} session(s) in database but total cost_usd = 0.0 — "
             "model names may not be recognised by the pricing table"

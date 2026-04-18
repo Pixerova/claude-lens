@@ -1,10 +1,6 @@
 /**
  * UsageTile.tsx — Colored tile showing % usage for a single plan meter.
  *
- * Used in two sizes:
- *   full    — collapsed view (min-height 78px, 34px number)
- *   compact — expanded view header (min-height 58px, 24px number)
- *
  * Background color encodes both the meter type (session vs weekly)
  * and the current alert level (normal / warn / crit).
  * Critical tiles pulse via the `animate-flash` utility.
@@ -20,7 +16,6 @@ interface UsageTileProps {
   type: MeterType;
   pct: number;        // 0–1
   resetsAt: string;   // ISO 8601
-  compact?: boolean;
   style?: React.CSSProperties;
 }
 
@@ -48,7 +43,6 @@ export const UsageTile: React.FC<UsageTileProps> = ({
   type,
   pct,
   resetsAt,
-  compact = false,
   style,
 }) => {
   const level  = alertLevel(pct);
@@ -59,27 +53,6 @@ export const UsageTile: React.FC<UsageTileProps> = ({
   // "in 2h 15m" when < 24 h away, "Mon 4:30 AM" otherwise
   const raw        = formatResetTime(resetsAt, true);
   const resetLabel = /^\d/.test(raw) ? `in ${raw}` : raw;
-
-  if (compact) {
-    return (
-      <div
-        className={`${bg} rounded-[9px] px-2.5 py-2 flex flex-col justify-between min-h-[58px] overflow-hidden${isCrit ? " animate-flash" : ""}`}
-        style={style}
-      >
-        <div className="font-mono text-2xl font-bold tracking-tighter leading-none text-white">
-          {formatPct(pct)}
-        </div>
-        <div>
-          <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.09em] text-white/75 mt-1">
-            {label}
-          </div>
-          <div className="font-mono text-[9px] text-white/55 mt-0.5">
-            {resetLabel}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div

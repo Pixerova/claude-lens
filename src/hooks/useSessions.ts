@@ -3,9 +3,6 @@
  *
  * Fetches recent sessions, by-source aggregates, chart data, and stats cards.
  * Refreshes on a slow 5-minute timer (session data changes infrequently).
- *
- * Also computes durationChartData client-side from the session list (no extra
- * API call needed — each Session already carries durationSec + startedAt).
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
@@ -91,15 +88,6 @@ export function useSessions(days = 7): UseSessionsResult {
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
-
-/** "2h 14m" or "45m" or "< 1m" */
-export function formatDuration(seconds: number): string {
-  if (seconds < 60) return "< 1m";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h === 0) return `${m}m`;
-  return `${h}h ${m}m`;
-}
 
 /** "$0.03" or "$1.20" */
 export function formatCost(usd: number): string {
