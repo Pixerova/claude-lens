@@ -39,6 +39,25 @@ COWORK_DIR = (
 
 # ── JSONL parser (Claude Code) ────────────────────────────────────────────────
 
+def _extract_title(content) -> Optional[str]:
+    """
+    Pull plain text from a message content value (string or content-block array).
+    Returns the first non-empty text truncated to 200 characters, or None.
+    """
+    if isinstance(content, str):
+        text = content.strip()
+    elif isinstance(content, list):
+        parts = [
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        ]
+        text = " ".join(parts).strip()
+    else:
+        return None
+    return text[:200] if text else None
+
+
 def parse_code_session(jsonl_path: Path) -> Optional[dict]:
     """
     Parse a single Claude Code .jsonl session file.
@@ -50,10 +69,9 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
       sessionId   : str
       cwd         : str   (working directory → project)
       gitBranch   : str
-      message     : { role, content }
-                    content may contain usage: { input_tokens, output_tokens,
-                    cache_creation_input_tokens, cache_read_input_tokens }
-      model       : str (on assistant messages)
+      message     : { role, content, model (on assistant), usage (on assistant) }
+                    usage: { input_tokens, output_tokens,
+                             cache_creation_input_tokens, cache_read_input_tokens }
     """
     events = []
     try:
@@ -74,12 +92,13 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
         return None
 
     # ── Extract fields ──────────────────────────────────────────────────────
-    session_id  = None
-    timestamps  = []
-    model       = "unknown"
-    project     = None
-    total_input = 0
-    total_output = 0
+    session_id       = None
+    timestamps       = []
+    model            = "unknown"
+    project          = None
+    title            = None
+    total_input      = 0
+    total_output     = 0
     total_cache_read = 0
     total_cache_write = 0
 
@@ -99,15 +118,28 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
             if cwd:
                 project = Path(cwd).name   # use the directory leaf name
 
-        # Model is on assistant messages
-        if evt.get("type") == "assistant" or evt.get("role") == "assistant":
-            m = evt.get("model")
-            if m and m != "unknown":
+        msg = evt.get("message", {})
+        if not isinstance(msg, dict):
+            msg = {}
+
+        # Title: first user-typed message only. Reject list content — tool-result
+        # events also carry type="user" but have list content, not a typed string.
+        if title is None and (evt.get("type") == "user" or msg.get("role") == "user"):
+            content = msg.get("content")
+            if isinstance(content, str):
+                title = _extract_title(content)
+
+        # Model: nested inside message dict on assistant events.
+        # Skip "<synthetic>" — Claude Code's internal label for generated events
+        # (tool summaries, context injections); they carry zero tokens and no real model.
+        if evt.get("type") == "assistant" or msg.get("role") == "assistant":
+            m = msg.get("model")
+            if m and m not in ("unknown", "<synthetic>"):
                 model = m
 
-        # Token usage lives inside message.usage on assistant events
-        msg = evt.get("message", {})
-        if isinstance(msg, dict):
+            # Token usage: only present on assistant events per the JSONL contract.
+            # Nesting here prevents silent over-counting if future format versions
+            # attach usage keys to non-assistant event types.
             usage = msg.get("usage", {})
             if isinstance(usage, dict):
                 total_input       += usage.get("input_tokens", 0)
@@ -142,14 +174,19 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
     )
 
     return {
-        "session_id":   session_id,
-        "source":       "code",
-        "started_at":   started_at,
-        "ended_at":     ended_at,
-        "duration_sec": duration_sec,
-        "model":        model,
-        "project":      project,
-        "cost_usd":     cost_usd,
+        "session_id":        session_id,
+        "source":            "code",
+        "started_at":        started_at,
+        "ended_at":          ended_at,
+        "duration_sec":      duration_sec,
+        "model":             model,
+        "project":           project,
+        "cost_usd":          cost_usd,
+        "title":             title,
+        "input_tokens":      total_input,
+        "output_tokens":     total_output,
+        "cache_read_tokens": total_cache_read,
+        "cache_write_tokens": total_cache_write,
     }
 
 

@@ -33,7 +33,12 @@ export interface Session {
   model: string;
   project: string | null;
   costUsd: number;
-  pctOfWeek: number;    // 0–1, share of this week's total tracked cost
+  title: string | null;       // first user message text, max 200 chars
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  pctOfWeek: number;          // 0–1, share of this week's total tracked cost
 }
 
 export interface SessionStats {

@@ -82,7 +82,7 @@ cargo install tauri-cli --version "^2.0"
 ```bash
 cd ~/Documents/GitHub2015/claude-lens/sidecar
 source .venv/bin/activate
-uvicorn main:app --host 127.0.0.1 --port 8765 --reload
+uvicorn main:app --host 127.0.0.1 --port 8765 --reload --reload-exclude 'tests/*'
 ```
 
 **Terminal 2 — Tauri dev:**

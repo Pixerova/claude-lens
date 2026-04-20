@@ -113,9 +113,9 @@ def make_code_events(
             "sessionId": session_id,
             "timestamp": t1,
             "cwd": cwd,
-            "model": model,
             "message": {
                 "role": "assistant",
+                "model": model,
                 "content": "Here are your tests...",
                 "usage": {
                     "input_tokens": input_tokens,
