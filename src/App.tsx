@@ -165,7 +165,9 @@ export default function App() {
   useEffect(() => {
     const win = getCurrentWindow();
     let height: number;
-    if (expanded) {
+    if (usageError) {
+      height = 210; // header (~38) + ErrorPanel (~172)
+    } else if (expanded) {
       height = 580;
     } else if (usage?.isStale) {
       height = 296;
@@ -173,7 +175,7 @@ export default function App() {
       height = 264;
     }
     win.setSize(new LogicalSize(340, height)).catch(() => {});
-  }, [expanded, usage?.isStale]);
+  }, [expanded, usage?.isStale, usageError]);
 
   // Drag from header
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -183,6 +185,11 @@ export default function App() {
 
   // Suggestion count — stub for M5, always 0 until engine is wired
   const suggestionCount = 0;
+
+  const handleSuggest = useCallback(() => {
+    setExpanded(true);
+    // TODO(M5): scroll to / focus suggestion panel
+  }, []);
 
   const localCostWeek = totalCostUsd(bySource);
   const showBrowserRow = usage !== null && bySource.length > 0 && usage.weeklyPct > 0;
@@ -273,7 +280,7 @@ export default function App() {
 
                   {/* Suggest action tile */}
                   <button
-                    onClick={() => setExpanded(true)}
+                    onClick={handleSuggest}
                     className={`bg-tile-suggest rounded-[9px] min-h-[78px] flex flex-col items-center justify-center gap-[7px] hover:bg-[#1c1c10] transition-colors cursor-pointer ${
                       suggestionCount > 0
                         ? "border border-[rgba(255,210,0,0.45)]"

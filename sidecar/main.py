@@ -18,7 +18,7 @@ import json
 import logging
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -294,12 +294,11 @@ def sessions(limit: int = Query(default=20, ge=1, le=200)):
     """
     rows         = db.get_recent_sessions(limit)
     week_cost    = db.get_week_total_cost(days=7)
-    week_cutoff  = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
-    def _pct(started_at: str, cost: float) -> float:
-        # Sessions outside the 7-day window are not part of this week's total;
-        # giving them a non-zero pct would cause the list to sum above 100%.
-        if week_cost <= 0 or started_at < week_cutoff:
+    def _pct(cost: float) -> float:
+        # get_recent_sessions already filters to 7 days, so no row falls outside
+        # the window — only need to guard against a zero weekly total.
+        if week_cost <= 0:
             return 0.0
         return round(cost / week_cost, 4)
 
@@ -318,7 +317,7 @@ def sessions(limit: int = Query(default=20, ge=1, le=200)):
             "outputTokens":     r["output_tokens"],
             "cacheReadTokens":  r["cache_read_tokens"],
             "cacheWriteTokens": r["cache_write_tokens"],
-            "pctOfWeek":        _pct(r["started_at"], r["cost_usd"]),
+            "pctOfWeek":        _pct(r["cost_usd"]),
         }
         for r in rows
     ]

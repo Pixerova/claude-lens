@@ -136,13 +136,15 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
             if m and m not in ("unknown", "<synthetic>"):
                 model = m
 
-        # Token usage: inside message.usage on assistant events
-        usage = msg.get("usage", {})
-        if isinstance(usage, dict):
-            total_input       += usage.get("input_tokens", 0)
-            total_output      += usage.get("output_tokens", 0)
-            total_cache_read  += usage.get("cache_read_input_tokens", 0)
-            total_cache_write += usage.get("cache_creation_input_tokens", 0)
+            # Token usage: only present on assistant events per the JSONL contract.
+            # Nesting here prevents silent over-counting if future format versions
+            # attach usage keys to non-assistant event types.
+            usage = msg.get("usage", {})
+            if isinstance(usage, dict):
+                total_input       += usage.get("input_tokens", 0)
+                total_output      += usage.get("output_tokens", 0)
+                total_cache_read  += usage.get("cache_read_input_tokens", 0)
+                total_cache_write += usage.get("cache_creation_input_tokens", 0)
 
     if not session_id:
         session_id = jsonl_path.stem
