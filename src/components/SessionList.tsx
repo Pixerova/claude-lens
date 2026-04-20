@@ -72,10 +72,9 @@ export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading })
 
       {sessions.map((s) => {
         // Cowork: conversation title when available, otherwise formatted timestamp.
-        // Code: project folder name, falling back to model.
         const label = s.source === "cowork"
           ? (s.title ?? coworkLabel(s.startedAt))
-          : (s.project ?? s.model ?? s.source);
+          : null;
 
         const pct = s.pctOfWeek < 0.005
           ? "< 1%"
@@ -92,12 +91,25 @@ export const SessionList: React.FC<SessionListProps> = ({ sessions, isLoading })
             <div className="w-[46px] shrink-0 flex items-center">
               <SourceBadge source={s.source} />
             </div>
-            <span
-              className="flex-1 min-w-0 text-[10px] font-medium text-white truncate leading-none"
-              title={label ?? undefined}
-            >
-              {label}
-            </span>
+            {s.source === "code" ? (
+              <span
+                className="flex-1 min-w-0 text-[10px] font-medium text-white truncate leading-none"
+                title={[s.project, s.title].filter(Boolean).join(" : ") || s.model || s.source}
+              >
+                {s.project && (
+                  <span className="text-[#6eb0ff]">{s.project}</span>
+                )}
+                {s.project && s.title && " : "}
+                {s.title ?? (!s.project ? (s.model ?? s.source) : null)}
+              </span>
+            ) : (
+              <span
+                className="flex-1 min-w-0 text-[10px] font-medium text-white truncate leading-none"
+                title={label ?? undefined}
+              >
+                {label}
+              </span>
+            )}
           </div>
         );
       })}
