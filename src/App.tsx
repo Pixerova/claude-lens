@@ -97,10 +97,10 @@ const SourceRow: React.FC<SourceRowProps> = ({
     <div className="text-right shrink-0 ml-3">
       {hasData ? (
         <>
-          <div className="font-mono text-[11px] text-white/70 leading-none">
+          <div className="font-mono text-[11px] text-white leading-none">
             {Math.round(share * 100)}%
           </div>
-          <div className="font-mono text-[9px] text-white/60 mt-[3px] leading-none">
+          <div className="font-mono text-[9px] text-white mt-[3px] leading-none">
             {isOverage ? "plan maxed" : `${(planPct * 100).toFixed(1)}% of plan`}
           </div>
         </>

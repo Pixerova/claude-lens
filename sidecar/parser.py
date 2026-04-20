@@ -122,10 +122,11 @@ def parse_code_session(jsonl_path: Path) -> Optional[dict]:
         if not isinstance(msg, dict):
             msg = {}
 
-        # Title: first user message (content text, max 200 chars)
+        # Title: first user-typed message only. Reject list content — tool-result
+        # events also carry type="user" but have list content, not a typed string.
         if title is None and (evt.get("type") == "user" or msg.get("role") == "user"):
             content = msg.get("content")
-            if content:
+            if isinstance(content, str):
                 title = _extract_title(content)
 
         # Model: nested inside message dict on assistant events.

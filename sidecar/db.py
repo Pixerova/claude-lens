@@ -104,9 +104,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         "title", "input_tokens", "output_tokens",
         "cache_read_tokens", "cache_write_tokens",
     }
+    _ALLOWED_TYPEDEFS = {
+        "TEXT",
+        "INTEGER NOT NULL DEFAULT 0",
+    }
     for col, typedef in additions:
         if col not in existing:
             assert col in _ALLOWED_MIGRATION_COLS, f"Unexpected column in migration: {col!r}"
+            assert typedef in _ALLOWED_TYPEDEFS, f"Unexpected typedef in migration: {typedef!r}"
             conn.execute(f"ALTER TABLE session_summaries ADD COLUMN {col} {typedef}")
             log.info("Migration: added column %s to session_summaries", col)
     conn.commit()

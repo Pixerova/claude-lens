@@ -30,7 +30,12 @@ fn start_sidecar(app: &AppHandle) {
     match shell.sidecar("sidecar") {
         Ok(cmd) => {
             match cmd.spawn() {
-                Ok((_rx, child)) => {
+                Ok((mut rx, child)) => {
+                    // Drain the event receiver to prevent the sidecar's stdout/stderr
+                    // pipe buffer from filling and blocking its logging calls.
+                    tauri::async_runtime::spawn(async move {
+                        while rx.recv().await.is_some() {}
+                    });
                     if let Some(handle) = app.try_state::<SidecarHandle>() {
                         *handle.0.lock().unwrap() = Some(child);
                     }
