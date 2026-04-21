@@ -1,5 +1,5 @@
 """
-test_db_stats.py — Tests for M3/M4 additions to db.py:
+test_db_stats.py — Tests for db.py stats functions:
   - get_session_stats()
   - get_week_total_cost()
 
