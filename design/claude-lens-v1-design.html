@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Lens — V1 UX Design</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: #ffffff;
+    color: #111111;
+    padding: 48px 40px 80px;
+    min-height: 100vh;
+  }
+
+  .page-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 36px;
+  }
+
+  .col-header {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #111;
+    margin-bottom: 18px;
+  }
+
+  .states-row {
+    display: flex;
+    gap: 56px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .state-block {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .state-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #333;
+  }
+
+  .sub-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #777;
+    margin-bottom: -6px;
+  }
+
+  /* ─── WIDGET SHELL ─── */
+  .widget {
+    width: 248px;
+    background: #0c0c0e;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  /* ─── HEADER ─── */
+  .wh {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 11px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .logo {
+    width: 19px; height: 19px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .logo.norm { background: linear-gradient(135deg, #00c6ff, #0072ff); }
+  .logo.warn { background: linear-gradient(135deg, #f7971e, #ffd200); }
+  .logo.crit { background: linear-gradient(135deg, #ff416c, #ff4b2b); }
+  .logo.idle { background: #222; border: 1px solid #333; }
+
+  .wh-name {
+    font-size: 12px; font-weight: 600;
+    color: #ffffff;
+    flex: 1;
+    letter-spacing: -0.01em;
+  }
+
+  .stale-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #ffd200;
+    animation: pulse 2s infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .hbtn {
+    width: 19px; height: 19px;
+    background: transparent; border: none;
+    border-radius: 4px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: #666;
+    transition: color 0.15s, background 0.15s;
+  }
+  .hbtn:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  .hbtn svg { width: 12px; height: 12px; }
+
+  /* ─── 2×2 TILE GRID ─── */
+  .tgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+    padding: 5px 5px 3px;
+  }
+
+  .tile {
+    border-radius: 9px;
+    padding: 11px 10px 9px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 78px;
+    overflow: hidden;
+    cursor: default;
+  }
+
+  /* Session tile */
+  .ts-norm { background: #00695c; }
+  .ts-warn { background: #bf360c; }
+  .ts-crit { background: #b71c1c; }
+
+  /* Weekly tile */
+  .tw-norm { background: #1565c0; }
+  .tw-warn { background: #e65100; }
+  .tw-crit { background: #6a1b9a; }
+
+  /* Action tiles */
+  .ta {
+    background: #161618;
+    border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .ta:hover { background: #1e1e22; }
+
+  .ta-sug {
+    background: #161612;
+    border: 1px solid rgba(255,210,0,0.22);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .ta-sug:hover { background: #1c1c10; }
+
+  .tile-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 34px; font-weight: 700;
+    letter-spacing: -0.04em; line-height: 1;
+    color: #ffffff;
+  }
+
+  .tile-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 0.09em; text-transform: uppercase;
+    color: rgba(255,255,255,0.75);
+    margin-top: 5px;
+  }
+
+  .tile-rst {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 2px;
+  }
+
+  .tile-action {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100%; gap: 7px;
+  }
+
+  .tile-action-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: #ffffff;
+  }
+
+  .bulb-wrap {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255,214,0,0.12);
+    border: 1.5px solid rgba(255,214,0,0.35);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Collapsed bottom padding */
+  .wcollapsed-pad { height: 9px; }
+
+  /* Critical flash */
+  .flash { animation: cfx 1.4s ease-in-out infinite; }
+  @keyframes cfx { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+  /* ─── DIVIDER ─── */
+  .divider {
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+    margin: 2px 0;
+  }
+
+  /* ─── SECTION TITLE ─── */
+  .sec-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(255,255,255,0.75);
+    padding: 8px 12px 5px;
+  }
+
+  /* ─── TOP PROJECT CARD ─── */
+  .top-proj-wrap {
+    padding: 4px 10px 4px;
+  }
+
+  .top-proj-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+  }
+
+  .top-proj-key {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.75);
+    flex-shrink: 0;
+    margin-right: 12px;
+  }
+
+  .top-proj-val {
+    font-size: 13px; font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-align: right;
+  }
+
+  /* ─── SOURCE ROWS (Last 7 Days) ─── */
+  .src-rows { padding: 0 12px 6px; }
+
+  .src-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+  }
+
+  .src-left {
+    display: flex; align-items: center;
+    gap: 5px; flex: 1; min-width: 0;
+  }
+
+  .src-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%; flex-shrink: 0;
+  }
+
+  .src-name {
+    font-size: 11px; font-weight: 500;
+    color: #ffffff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .src-name.dim { color: rgba(255,255,255,0.60); }
+
+  .src-right {
+    text-align: right; flex-shrink: 0; margin-left: 12px;
+  }
+
+  .src-share {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #ffffff; line-height: 1;
+  }
+
+  .src-plan {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: #ffffff;
+    margin-top: 3px; line-height: 1;
+  }
+
+  .src-untrk {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: rgba(255,255,255,0.40);
+    font-style: italic;
+    flex-shrink: 0; margin-left: 12px;
+  }
+
+  /* ─── DAILY USAGE CHART ─── */
+  .chart-area {
+    padding: 0 12px;
+    margin-bottom: 4px;
+    height: 60px;
+    display: flex; align-items: flex-end; gap: 3px;
+  }
+
+  .chart-col {
+    flex: 1; display: flex;
+    flex-direction: column; align-items: center;
+    gap: 2px; height: 100%; justify-content: flex-end;
+  }
+
+  .chart-stack {
+    display: flex; flex-direction: column;
+    justify-content: flex-end; gap: 1px;
+    width: 12px;
+  }
+
+  .cseg { width: 12px; border-radius: 2px; }
+  .cseg.code { background: #2979ff; }
+  .cseg.cw { background: #7c5cbf; }
+
+  .cdlbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; color: rgba(255,255,255,0.4);
+    text-align: center; margin-top: 3px;
+  }
+  .cdlbl.today { color: #ffffff; font-weight: 700; }
+
+  .legend {
+    display: flex; gap: 12px;
+    padding: 0 12px; margin-bottom: 6px;
+  }
+
+  .leg-item { display: flex; align-items: center; gap: 4px; }
+  .leg-dot { width: 7px; height: 7px; border-radius: 2px; }
+  .leg-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: rgba(255,255,255,0.55);
+  }
+
+  /* ─── SESSION LIST ─── */
+  .slist-wrap { padding: 0 10px 8px; }
+
+  .slist-header {
+    display: flex; align-items: center;
+    gap: 5px; padding: 0 4px 4px;
+  }
+
+  .slist-hcell {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.60);
+  }
+
+  .slist-scroll {
+    max-height: 168px; overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+  }
+  .slist-scroll::-webkit-scrollbar { width: 3px; }
+  .slist-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .srow {
+    display: flex; align-items: center;
+    gap: 5px; padding: 2px 4px;
+    border-radius: 4px;
+    transition: background 0.1s;
+  }
+  .srow:hover { background: rgba(255,255,255,0.04); }
+
+  .spct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: rgba(255,255,255,0.65);
+    width: 24px; text-align: right; flex-shrink: 0; line-height: 1;
+  }
+
+  .sbadge {
+    display: inline-flex; align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 1px 4px; border-radius: 3px; white-space: nowrap;
+    line-height: 1;
+  }
+  .sbadge.code { background: rgba(41,121,255,0.2); color: #6eb0ff; }
+  .sbadge.cw   { background: rgba(124,92,191,0.2); color: #b89ef0; }
+
+  .ssrc-cell { width: 46px; flex-shrink: 0; display: flex; align-items: center; }
+
+  .slabel {
+    flex: 1; min-width: 0;
+    font-size: 10px; font-weight: 500; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 1;
+  }
+
+  .sproj-blue { color: #6eb0ff; }
+
+  /* ─── SUGGESTIONS FOOTER ─── */
+  .sug-footer {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .sug-left {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .sug-bulb {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: rgba(255,214,0,0.12);
+    border: 1px solid rgba(255,214,0,0.35);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .sug-text {
+    font-size: 11px; font-weight: 600; color: #ffffff;
+  }
+
+  .sug-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #6eb0ff;
+    background: rgba(0,114,255,0.1);
+    border: 1px solid rgba(0,114,255,0.3);
+    border-radius: 4px; padding: 3px 9px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .sug-btn:hover { background: rgba(0,114,255,0.18); }
+
+  /* ─── STALE BANNER ─── */
+  .stale-banner {
+    display: flex; align-items: center; gap: 6px;
+    margin: 4px 10px 6px;
+    background: rgba(255,210,0,0.08);
+    border: 1px solid rgba(255,210,0,0.2);
+    border-radius: 6px; padding: 5px 9px;
+  }
+  .stale-banner-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #ffd200;
+    animation: pulse 2s infinite; flex-shrink: 0;
+  }
+  .stale-banner-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 600;
+    color: #ffd200;
+  }
+
+  /* ─── EDGE: LOADING SHIMMER ─── */
+  @keyframes shimmer { 0%,100%{opacity:0.35} 50%{opacity:0.7} }
+
+  .shimmer-block {
+    border-radius: 8px;
+    background: rgba(255,255,255,0.07);
+    animation: shimmer 1.5s infinite ease-in-out;
+  }
+
+  /* ─── EDGE: ERROR ─── */
+  .error-body {
+    padding: 22px 14px 24px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+
+  .error-icon {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255,50,50,0.1);
+    border: 1.5px solid rgba(255,50,50,0.3);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 2px;
+  }
+
+  .error-title {
+    font-size: 12px; font-weight: 700; color: #ff6b6b;
+  }
+
+  .error-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: rgba(255,255,255,0.5);
+    line-height: 1.5;
+  }
+
+  .error-retry {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #ff6b6b;
+    background: rgba(255,50,50,0.1);
+    border: 1px solid rgba(255,50,50,0.25);
+    border-radius: 4px; padding: 4px 12px;
+    cursor: pointer; margin-top: 4px;
+  }
+
+  svg { display: block; }
+</style>
+</head>
+<body>
+
+<div class="page-title">Claude Lens — V1 UX Design · April 2026</div>
+
+<div class="states-row">
+
+  <!-- ══════════════════════════════════
+       COLUMN 1 — COLLAPSED
+  ══════════════════════════════════ -->
+  <div class="state-block">
+    <div class="col-header">Collapsed</div>
+
+    <!-- Normal -->
+    <div class="sub-label">Normal</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo norm">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-norm">
+          <div class="tile-num">21%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 2h 15m</div></div>
+        </div>
+        <div class="tile tw-norm">
+          <div class="tile-num">34%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+        <div class="tile ta">
+          <div class="tile-action">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="tile-action-lbl">Expand</span>
+          </div>
+        </div>
+        <div class="tile ta-sug">
+          <div class="tile-action">
+            <div class="bulb-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/></svg>
+            </div>
+            <span class="tile-action-lbl" style="color:#ffd600;">Suggest</span>
+          </div>
+        </div>
+      </div>
+      <div class="wcollapsed-pad"></div>
+    </div>
+
+    <!-- Warning -->
+    <div class="sub-label">Warning (80–89%)</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo warn">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-warn">
+          <div class="tile-num">84%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 25 min</div></div>
+        </div>
+        <div class="tile tw-warn">
+          <div class="tile-num">67%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+        <div class="tile ta">
+          <div class="tile-action">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="tile-action-lbl">Expand</span>
+          </div>
+        </div>
+        <div class="tile ta-sug">
+          <div class="tile-action">
+            <div class="bulb-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/></svg>
+            </div>
+            <span class="tile-action-lbl" style="color:#ffd600;">Suggest</span>
+          </div>
+        </div>
+      </div>
+      <div class="wcollapsed-pad"></div>
+    </div>
+
+    <!-- Critical -->
+    <div class="sub-label">Critical (≥90%)</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo crit">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-crit flash">
+          <div class="tile-num">96%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 4 min</div></div>
+        </div>
+        <div class="tile tw-crit flash" style="animation-delay:.3s;">
+          <div class="tile-num">88%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+        <div class="tile ta">
+          <div class="tile-action">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="tile-action-lbl">Expand</span>
+          </div>
+        </div>
+        <div class="tile ta-sug">
+          <div class="tile-action">
+            <div class="bulb-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/></svg>
+            </div>
+            <span class="tile-action-lbl" style="color:#ffd600;">Suggest</span>
+          </div>
+        </div>
+      </div>
+      <div class="wcollapsed-pad"></div>
+    </div>
+
+    <!-- Suggestion badge ready -->
+    <div class="sub-label">Suggestion badge (3 ready)</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo norm">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-norm">
+          <div class="tile-num">21%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 2h 15m</div></div>
+        </div>
+        <div class="tile tw-norm">
+          <div class="tile-num">34%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+        <div class="tile ta">
+          <div class="tile-action">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="tile-action-lbl">Expand</span>
+          </div>
+        </div>
+        <div class="tile ta-sug" style="border-color:rgba(255,210,0,0.45);">
+          <div class="tile-action">
+            <div class="bulb-wrap" style="border-color:rgba(255,214,0,0.6);background:rgba(255,214,0,0.18);">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/></svg>
+            </div>
+            <span class="tile-action-lbl" style="color:#ffd600;">3 ready</span>
+          </div>
+        </div>
+      </div>
+      <div class="wcollapsed-pad"></div>
+    </div>
+
+    <!-- Collapsed + stale -->
+    <div class="sub-label">Collapsed + stale data</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo norm">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <div class="stale-dot" title="Data may be stale"></div>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-norm">
+          <div class="tile-num">21%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 2h 15m</div></div>
+        </div>
+        <div class="tile tw-norm">
+          <div class="tile-num">34%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+        <div class="tile ta">
+          <div class="tile-action">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="tile-action-lbl">Expand</span>
+          </div>
+        </div>
+        <div class="tile ta-sug">
+          <div class="tile-action">
+            <div class="bulb-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/></svg>
+            </div>
+            <span class="tile-action-lbl" style="color:#ffd600;">Suggest</span>
+          </div>
+        </div>
+      </div>
+      <div class="stale-banner" style="margin-top:2px;">
+        <div class="stale-banner-dot"></div>
+        <span class="stale-banner-text">Data stale · last updated 3:45 PM</span>
+      </div>
+      <div class="wcollapsed-pad"></div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════
+       COLUMN 2 — EXPANDED
+  ══════════════════════════════════ -->
+  <div class="state-block">
+    <div class="col-header">Expanded</div>
+
+    <div class="sub-label">Normal state</div>
+    <div class="widget" style="width:268px;">
+      <!-- Header -->
+      <div class="wh">
+        <div class="logo norm">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Collapse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        </button>
+      </div>
+
+      <!-- Full-size usage tiles (same size as collapsed) -->
+      <div class="tgrid">
+        <div class="tile ts-norm">
+          <div class="tile-num">21%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 2h 15m</div></div>
+        </div>
+        <div class="tile tw-norm">
+          <div class="tile-num">34%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Top Project -->
+      <div class="top-proj-wrap">
+        <div class="top-proj-inner">
+          <span class="top-proj-key">Top Project</span>
+          <span class="top-proj-val">claude-lens</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Last 7 Days (source breakdown) -->
+      <div class="sec-title">Last 7 Days</div>
+      <div class="src-rows">
+        <div class="src-row">
+          <div class="src-left">
+            <div class="src-dot" style="background:#2979ff;"></div>
+            <span class="src-name">Claude Code</span>
+          </div>
+          <div class="src-right">
+            <div class="src-share">72%</div>
+            <div class="src-plan">24.5% of plan</div>
+          </div>
+        </div>
+        <div class="src-row">
+          <div class="src-left">
+            <div class="src-dot" style="background:#7c5cbf;"></div>
+            <span class="src-name">Cowork</span>
+          </div>
+          <div class="src-right">
+            <div class="src-share">28%</div>
+            <div class="src-plan">9.5% of plan</div>
+          </div>
+        </div>
+        <div class="src-row">
+          <div class="src-left">
+            <div class="src-dot" style="background:#444;"></div>
+            <span class="src-name dim">Other (browser)</span>
+          </div>
+          <span class="src-untrk">untracked</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Daily Usage chart -->
+      <div class="sec-title">Daily Usage</div>
+      <div class="chart-area">
+        <div class="chart-col">
+          <div class="chart-stack"><div class="cseg cw" style="height:5px;"></div><div class="cseg code" style="height:16px;"></div></div>
+          <div class="cdlbl">Mon</div>
+        </div>
+        <div class="chart-col">
+          <div class="chart-stack"><div class="cseg code" style="height:26px;"></div></div>
+          <div class="cdlbl">Tue</div>
+        </div>
+        <div class="chart-col">
+          <div class="chart-stack"><div class="cseg code" style="height:2px;opacity:.3;"></div></div>
+          <div class="cdlbl">Wed</div>
+        </div>
+        <div class="chart-col">
+          <div class="chart-stack"><div class="cseg cw" style="height:14px;"></div><div class="cseg code" style="height:38px;"></div></div>
+          <div class="cdlbl">Thu</div>
+        </div>
+        <div class="chart-col">
+          <div class="chart-stack"><div class="cseg code" style="height:30px;"></div></div>
+          <div class="cdlbl">Fri</div>
+        </div>
+        <div class="chart-col">
+          <div class="chart-stack"><div class="cseg cw" style="height:8px;"></div></div>
+          <div class="cdlbl">Sat</div>
+        </div>
+        <div class="chart-col">
+          <div class="chart-stack"><div class="cseg cw" style="height:12px;"></div><div class="cseg code" style="height:20px;"></div></div>
+          <div class="cdlbl today">Sun</div>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:#2979ff;"></div><span class="leg-lbl">Code</span></div>
+        <div class="leg-item"><div class="leg-dot" style="background:#7c5cbf;"></div><span class="leg-lbl">Cowork</span></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Sessions in the Last 7 Days -->
+      <div class="sec-title">Sessions in the Last 7 Days (7)</div>
+      <div class="slist-wrap">
+        <!-- Column headers -->
+        <div class="slist-header">
+          <span class="slist-hcell" style="width:24px; text-align:right; flex-shrink:0;">%</span>
+          <span class="slist-hcell" style="width:46px; flex-shrink:0;">Src</span>
+          <span class="slist-hcell" style="flex:1;">Session</span>
+        </div>
+        <div class="slist-scroll">
+          <!-- Code session: project in blue + separator + title -->
+          <div class="srow">
+            <span class="spct">21%</span>
+            <div class="ssrc-cell"><span class="sbadge code">Code</span></div>
+            <span class="slabel"><span class="sproj-blue">claude-lens</span> : ui-redesign</span>
+          </div>
+          <!-- Cowork session: date · time label -->
+          <div class="srow">
+            <span class="spct">14%</span>
+            <div class="ssrc-cell"><span class="sbadge cw">Cowork</span></div>
+            <span class="slabel">Apr 19 · 3:30 PM</span>
+          </div>
+          <!-- Code session: project only (no title) -->
+          <div class="srow">
+            <span class="spct">8%</span>
+            <div class="ssrc-cell"><span class="sbadge code">Code</span></div>
+            <span class="slabel"><span class="sproj-blue">api-gateway</span> : endpoint-auth</span>
+          </div>
+          <!-- Code session: project + title -->
+          <div class="srow">
+            <span class="spct">7%</span>
+            <div class="ssrc-cell"><span class="sbadge code">Code</span></div>
+            <span class="slabel"><span class="sproj-blue">data-pipeline</span></span>
+          </div>
+          <!-- Cowork session -->
+          <div class="srow">
+            <span class="spct">6%</span>
+            <div class="ssrc-cell"><span class="sbadge cw">Cowork</span></div>
+            <span class="slabel">Apr 18 · 11:15 AM</span>
+          </div>
+          <!-- Code session -->
+          <div class="srow">
+            <span class="spct">4%</span>
+            <div class="ssrc-cell"><span class="sbadge code">Code</span></div>
+            <span class="slabel"><span class="sproj-blue">infra-scripts</span> : deploy-v2</span>
+          </div>
+          <!-- Tiny session -->
+          <div class="srow">
+            <span class="spct">&lt;1%</span>
+            <div class="ssrc-cell"><span class="sbadge code">Code</span></div>
+            <span class="slabel"><span class="sproj-blue">scratch</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggestion footer (visible when count > 0) -->
+      <div class="sug-footer">
+        <div class="sug-left">
+          <div class="sug-bulb">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/></svg>
+          </div>
+          <span class="sug-text">3 suggestions ready</span>
+        </div>
+        <button class="sug-btn">VIEW →</button>
+      </div>
+    </div>
+
+    <!-- Expanded + stale -->
+    <div class="sub-label" style="margin-top:6px;">Expanded + stale data</div>
+    <div class="widget" style="width:268px;">
+      <div class="wh">
+        <div class="logo norm">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <div class="stale-dot" title="Data may be stale"></div>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Collapse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        </button>
+      </div>
+      <!-- Full-size tiles -->
+      <div class="tgrid">
+        <div class="tile ts-norm">
+          <div class="tile-num">21%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 2h 15m</div></div>
+        </div>
+        <div class="tile tw-norm">
+          <div class="tile-num">34%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+      </div>
+      <!-- Stale banner appears just below tiles -->
+      <div class="stale-banner">
+        <div class="stale-banner-dot"></div>
+        <span class="stale-banner-text">Data stale · last updated 3:45 PM</span>
+      </div>
+      <div class="divider"></div>
+      <!-- Top Project -->
+      <div class="top-proj-wrap">
+        <div class="top-proj-inner">
+          <span class="top-proj-key">Top Project</span>
+          <span class="top-proj-val">claude-lens</span>
+        </div>
+      </div>
+      <div style="padding:10px 12px 12px; text-align:center;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:rgba(255,255,255,0.25);">(remaining sections continue below)</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════
+       COLUMN 3 — EDGE STATES
+  ══════════════════════════════════ -->
+  <div class="state-block">
+    <div class="col-header">Edge States</div>
+
+    <!-- Loading -->
+    <div class="sub-label">Loading (shimmer)</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo idle">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div style="padding:5px 5px 3px; display:grid; grid-template-columns:1fr 1fr; gap:3px;">
+        <div class="shimmer-block" style="height:78px; border-radius:9px; animation-delay:0s;"></div>
+        <div class="shimmer-block" style="height:78px; border-radius:9px; animation-delay:0.2s;"></div>
+        <div class="shimmer-block" style="height:78px; border-radius:9px; animation-delay:0.1s;"></div>
+        <div class="shimmer-block" style="height:78px; border-radius:9px; animation-delay:0.3s;"></div>
+      </div>
+      <div style="padding:5px 10px 10px;">
+        <div class="shimmer-block" style="height:13px; border-radius:4px; width:55%; animation-delay:0.15s;"></div>
+      </div>
+    </div>
+
+    <!-- Sidecar unreachable -->
+    <div class="sub-label">Sidecar unreachable</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo idle">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="error-body">
+        <div class="error-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/><circle cx="12" cy="12" r="10"/></svg>
+        </div>
+        <div class="error-title">Cannot reach sidecar</div>
+        <div class="error-sub">Make sure Claude Lens<br>is running</div>
+        <button class="error-retry">RETRY →</button>
+      </div>
+    </div>
+
+    <!-- Collapsed critical + stale -->
+    <div class="sub-label">Collapsed critical + stale</div>
+    <div class="widget">
+      <div class="wh">
+        <div class="logo crit">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <div class="stale-dot" title="Data may be stale"></div>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Expand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-crit flash">
+          <div class="tile-num">96%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 4 min</div></div>
+        </div>
+        <div class="tile tw-crit flash" style="animation-delay:.3s;">
+          <div class="tile-num">88%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+        <div class="tile ta">
+          <div class="tile-action">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <span class="tile-action-lbl">Expand</span>
+          </div>
+        </div>
+        <div class="tile ta-sug">
+          <div class="tile-action">
+            <div class="bulb-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/></svg>
+            </div>
+            <span class="tile-action-lbl" style="color:#ffd600;">Suggest</span>
+          </div>
+        </div>
+      </div>
+      <div class="stale-banner" style="margin-top:2px;">
+        <div class="stale-banner-dot"></div>
+        <span class="stale-banner-text">Data stale · last updated 3:45 PM</span>
+      </div>
+      <div class="wcollapsed-pad"></div>
+    </div>
+
+    <!-- Expanded: plan maxed (overage) -->
+    <div class="sub-label">Expanded: plan maxed</div>
+    <div class="widget" style="width:248px;">
+      <div class="wh">
+        <div class="logo crit">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Collapse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-crit flash">
+          <div class="tile-num">96%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 4 min</div></div>
+        </div>
+        <div class="tile tw-crit flash" style="animation-delay:.3s;">
+          <div class="tile-num">100%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="top-proj-wrap">
+        <div class="top-proj-inner">
+          <span class="top-proj-key">Top Project</span>
+          <span class="top-proj-val">claude-lens</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-title">Last 7 Days</div>
+      <div class="src-rows">
+        <div class="src-row">
+          <div class="src-left">
+            <div class="src-dot" style="background:#2979ff;"></div>
+            <span class="src-name">Claude Code</span>
+          </div>
+          <div class="src-right">
+            <div class="src-share">72%</div>
+            <div class="src-plan">plan maxed</div>
+          </div>
+        </div>
+        <div class="src-row">
+          <div class="src-left">
+            <div class="src-dot" style="background:#7c5cbf;"></div>
+            <span class="src-name">Cowork</span>
+          </div>
+          <div class="src-right">
+            <div class="src-share">28%</div>
+            <div class="src-plan">plan maxed</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:8px 12px 12px; text-align:center;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:rgba(255,255,255,0.25);">(sessions + chart continue below)</span>
+      </div>
+    </div>
+
+    <!-- Expanded: no sessions yet -->
+    <div class="sub-label">Expanded: no sessions</div>
+    <div class="widget" style="width:248px;">
+      <div class="wh">
+        <div class="logo norm">CL</div>
+        <span class="wh-name">Claude Lens</span>
+        <button class="hbtn" title="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/><polyline points="10 1 10 4 13 4"/></svg>
+        </button>
+        <button class="hbtn" title="Collapse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        </button>
+      </div>
+      <div class="tgrid">
+        <div class="tile ts-norm">
+          <div class="tile-num">4%</div>
+          <div><div class="tile-lbl">Session</div><div class="tile-rst">in 4h 52m</div></div>
+        </div>
+        <div class="tile tw-norm">
+          <div class="tile-num">4%</div>
+          <div><div class="tile-lbl">Weekly</div><div class="tile-rst">Mon 4:30 AM</div></div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-title">Last 7 Days</div>
+      <div style="padding:2px 12px 10px;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:rgba(255,255,255,0.30);">No sessions recorded yet.</span>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-title">Sessions in the Last 7 Days</div>
+      <div class="slist-wrap">
+        <p style="font-family:'JetBrains Mono',monospace; font-size:10px; color:rgba(255,255,255,0.60); text-align:center; padding:12px 0;">No sessions in the last 7 days.</p>
+      </div>
+      <div style="height:4px;"></div>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>
