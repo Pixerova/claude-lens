@@ -1,0 +1,578 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Claude Lens — Rule Engine Suggestions
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This file defines all suggestions surfaced by the Claude Lens rule engine.
+# It is designed to grow over time, including via open source contributions.
+#
+# SCHEMA
+# ──────
+# id                  Unique identifier, e.g. testing001. Never reuse an ID.
+# category            One of: testing | security | documentation | code_health |
+#                     dependencies | product | maintenance | productivity
+# title               Short label shown on the card. Max 100 characters.
+# description         2–4 sentences shown when the user expands the card.
+#                     Explains what Claude will do and why it is valuable.
+# prompt              The full prompt copied to clipboard or passed to Cowork.
+#                     Use {{project}} where the active project name should be
+#                     substituted. Prompts should degrade gracefully if
+#                     {{project}} resolves to an empty string.
+# trigger             When this suggestion is eligible. One of:
+#                       always            — eligible any time during working hours
+#                       low_utilization_eow — eligible when weekly utilization is
+#                                           below 50% with ≤ 48 hours to reset
+#                       post_reset        — eligible for ~4 hours after a weekly
+#                                           quota reset is detected
+#                     The schema supports a list for future use; v1 uses one value.
+# show_every_n_days   Minimum days between showings of this suggestion.
+#                     Prevents the same card from appearing too frequently.
+#                     Checked against suggestion_history.shown_at.
+# actions             Ordered list of actions. First item is the primary action.
+#                       copy_prompt       — copies the resolved prompt to clipboard
+#                       open_cowork       — copies prompt + brings Cowork to front
+#                       open_claude_code  — copies prompt + opens Claude Code
+#
+# CONTRIBUTING
+# ────────────
+# To add a suggestion: choose the right category, pick an ID that continues
+# the sequence (e.g. testing004 if testing003 is the last), fill all required
+# fields, and open a pull request. Run validate_suggestions.py locally first.
+# Comments are encouraged — use them to document intent, caveats, or guidance
+# for future editors.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version: "1.0"
+suggestions:
+
+# ───────────────────────────────────────────────────────────────────────────────
+# TESTING
+# Suggestions for improving test coverage, fixing flaky tests, and building
+# confidence in the test suite. Works best on projects with an existing test
+# framework in place.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: testing001
+    category: testing
+    title: "Audit test coverage"
+    description: >
+      Identifies test files that haven't been updated recently and maps out
+      areas of the codebase with no coverage. Returns a prioritised short report
+      so you know exactly where testing effort is most valuable.
+    prompt: >
+      Look for test files in {{project}} that haven't been touched in seven days.
+      Audit what is untested across the codebase. Present a short report with the
+      top 5 areas that would benefit most from additional test coverage, ordered
+      by risk and impact.
+    trigger: low_utilization_eow
+    show_every_n_days: 7
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: testing002
+    category: testing
+    title: "Write tests for the least-covered module"
+    description: >
+      Targets a single module or file for thorough test coverage. Useful when
+      you know a particular area is undertested but don't want to audit the
+      whole codebase first.
+    prompt: >
+      Write comprehensive tests for the most complex or least-tested module in
+      {{project}}. Cover the happy path, edge cases, and known failure modes.
+      Use the existing test framework and style conventions already present in
+      the project.
+    trigger: always
+    show_every_n_days: 5
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: testing003
+    category: testing
+    title: "Find and fix flaky tests"
+    description: >
+      Flaky tests erode trust in the test suite and slow down CI. This prompt
+      identifies tests with non-deterministic behaviour and proposes targeted
+      fixes for each.
+    prompt: >
+      Review the test suite in {{project}} for signs of flakiness: tests that
+      depend on timing, external state, random values, or execution order.
+      Identify the top 3 most likely candidates and propose a specific fix
+      for each.
+    trigger: always
+    show_every_n_days: 14
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+# ───────────────────────────────────────────────────────────────────────────────
+# SECURITY
+# Suggestions for hardening the codebase, auditing dependencies, and
+# identifying vulnerabilities before they become incidents.
+# The full audit (security002) is intentionally reserved for low_utilization_eow
+# since it benefits from a longer uninterrupted session.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: security001
+    category: security
+    title: "Audit dependencies for known vulnerabilities"
+    description: >
+      Runs a dependency audit on your project and categorises findings by
+      severity. Critical and high issues come with a specific remediation
+      recommendation: upgrade, replace, or remove.
+    prompt: >
+      Run a dependency audit on {{project}}. Identify packages with known
+      security vulnerabilities and categorise each finding as critical, high,
+      medium, or low. For every critical and high issue, propose a specific
+      remediation: upgrade to a safe version, replace with an alternative,
+      or remove if unused.
+    trigger: always
+    show_every_n_days: 14
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: security002
+    category: security
+    title: "Run a full security audit"
+    description: >
+      A comprehensive walkthrough of common vulnerability classes: hardcoded
+      secrets, authentication handling, input validation, CORS configuration,
+      and environment variable exposure. Best done with significant quota
+      remaining — it benefits from a full, uninterrupted session.
+    prompt: >
+      Conduct a security audit of {{project}}. Cover the following areas in
+      order: hardcoded secrets or credentials in source files, authentication
+      and session handling, input sanitisation and injection risks, CORS and
+      HTTP header configuration, and environment variable exposure. Report
+      findings by severity and propose a specific fix for each.
+    trigger: low_utilization_eow
+    show_every_n_days: 30
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: security003
+    category: security
+    title: "Scan for hardcoded secrets"
+    description: >
+      A focused scan for credentials, API keys, tokens, and passwords committed
+      to source code. Faster than a full audit and safe to run regularly as a
+      standing hygiene check.
+    prompt: >
+      Scan {{project}} for hardcoded secrets: API keys, tokens, passwords,
+      credentials, or private URLs committed directly to source files. Flag
+      every instance with its file and line number. For each, suggest the
+      correct approach: environment variable, secrets manager, or removal.
+    trigger: always
+    show_every_n_days: 21
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+# ───────────────────────────────────────────────────────────────────────────────
+# DOCUMENTATION
+# Suggestions for improving README files, inline docs, API references,
+# and other written material that helps people understand the codebase.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: documentation001
+    category: documentation
+    title: "Update the README"
+    description: >
+      A current README is often the difference between a project others can use
+      and one only you understand. This prompt refreshes setup instructions,
+      describes current functionality, and fills in any gaps left by recent
+      changes.
+    prompt: >
+      Review and update the README for {{project}}. Ensure it accurately
+      reflects current functionality, setup and installation steps, environment
+      variables required, and how to run tests. Flag any sections that are
+      outdated or missing and rewrite them.
+    trigger: always
+    show_every_n_days: 14
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: documentation002
+    category: documentation
+    title: "Add inline documentation to complex functions"
+    description: >
+      Identifies functions and methods that are missing docstrings or inline
+      comments, prioritising the most complex ones. Produces documentation
+      that explains intent, not just mechanics.
+    prompt: >
+      Find the 10 most complex or least-documented functions in {{project}}.
+      Add docstrings or inline comments explaining what each function does,
+      its parameters, return values, and any important edge cases or
+      assumptions. Match the existing documentation style in the project.
+    trigger: always
+    show_every_n_days: 10
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: documentation003
+    category: documentation
+    title: "Document API endpoints"
+    description: >
+      Produces clear reference documentation for all public API endpoints:
+      method, path, request parameters, response shape, and example payloads.
+      Useful before sharing an API with other developers or teams.
+    prompt: >
+      Document all API endpoints exposed by {{project}}. For each endpoint
+      include: HTTP method and path, description of purpose, request parameters
+      and body schema, response schema with an example payload, and any
+      authentication requirements. Format as a reference document.
+    trigger: low_utilization_eow
+    show_every_n_days: 21
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+# ───────────────────────────────────────────────────────────────────────────────
+# CODE HEALTH
+# Suggestions for improving the internal quality of existing code:
+# reducing complexity, eliminating duplication, and modernising patterns.
+# These do not change external behaviour — they improve maintainability.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: codehealth001
+    category: code_health
+    title: "Identify and refactor complex functions"
+    description: >
+      Finds the functions with the highest cyclomatic complexity and proposes
+      a concrete refactoring plan. Reduces future maintenance cost and makes
+      the codebase significantly easier to test.
+    prompt: >
+      Identify the five most complex functions in {{project}} by cyclomatic
+      complexity or nesting depth. For each, explain why it is complex and
+      propose a specific refactoring: extract helper functions, simplify
+      conditionals, or break into smaller units. Show the refactored version
+      for the top candidate.
+    trigger: low_utilization_eow
+    show_every_n_days: 14
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: codehealth002
+    category: code_health
+    title: "Find and consolidate code duplication"
+    description: >
+      Duplicate code is a maintenance liability — a bug fixed in one place
+      may still exist in another. This prompt finds repeated patterns and
+      proposes shared abstractions that remove duplication without
+      over-engineering.
+    prompt: >
+      Find significant code duplication in {{project}}. Look for repeated
+      logic blocks, similar functions that could be unified, and copy-pasted
+      patterns across files. For the top 3 cases, propose a concrete
+      consolidation: a shared utility function, a base class, or a common
+      module. Show the proposed implementation for the highest-priority case.
+    trigger: always
+    show_every_n_days: 14
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: codehealth003
+    category: code_health
+    title: "Break down oversized files"
+    description: >
+      Large files are hard to navigate, review, and test. This prompt
+      identifies files over a reasonable threshold and proposes how to split
+      them into smaller, focused modules without breaking existing imports.
+    prompt: >
+      Find files in {{project}} that are over 300 lines long. For the three
+      largest, propose how to split each into smaller focused modules. Show
+      the proposed module structure, what each new file would contain, and
+      how existing imports would need to be updated.
+    trigger: always
+    show_every_n_days: 21
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+# ───────────────────────────────────────────────────────────────────────────────
+# DEPENDENCIES
+# Suggestions for keeping packages current, removing unused libraries,
+# and managing license and compatibility risks.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: dependencies001
+    category: dependencies
+    title: "Review and prioritise outdated packages"
+    description: >
+      Lists all outdated dependencies and categorises them: safe to update now,
+      needs testing, or requires a breaking-change migration. Gives you a
+      prioritised upgrade plan rather than an overwhelming undifferentiated list.
+    prompt: >
+      List all outdated dependencies in {{project}}. Categorise each as:
+      safe to update now (patch or minor with no breaking changes), requires
+      testing (minor with known behavioural changes), or requires migration
+      (major version with breaking changes). Propose a prioritised upgrade
+      plan for the next two weeks.
+    trigger: always
+    show_every_n_days: 14
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: dependencies002
+    category: dependencies
+    title: "Remove unused dependencies"
+    description: >
+      Unused packages bloat install size and increase the attack surface
+      unnecessarily. This prompt identifies packages that are declared in the
+      manifest but not imported anywhere in the codebase.
+    prompt: >
+      Identify dependencies declared in the package manifest of {{project}}
+      that are not imported or used anywhere in the source code. For each
+      candidate, confirm it is safe to remove and show the command to
+      uninstall it cleanly.
+    trigger: always
+    show_every_n_days: 30
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+  - id: dependencies003
+    category: dependencies
+    title: "Check dependency license compatibility"
+    description: >
+      Catches license conflicts before they become legal problems. Particularly
+      important for GPL or AGPL dependencies in proprietary or commercially
+      distributed projects.
+    prompt: >
+      Review the licenses of all direct dependencies in {{project}}. Flag any
+      that are GPL, AGPL, or otherwise restrictive, and explain the
+      compatibility risk given the project's own license. Propose alternatives
+      for any high-risk dependencies.
+    trigger: low_utilization_eow
+    show_every_n_days: 30
+    actions:
+      - copy_prompt
+      - open_cowork
+      - open_claude_code
+
+# ───────────────────────────────────────────────────────────────────────────────
+# PRODUCT
+# Suggestions for writing specs, drafting changelogs, and producing
+# the written artefacts that make features shippable. These are naturally
+# Cowork tasks — they benefit from a conversational, iterative session.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: product001
+    category: product
+    title: "Write a spec for a new feature"
+    description: >
+      Turns a rough feature idea into a structured product spec covering goals,
+      non-goals, user stories, edge cases, and open questions. A good use of a
+      larger quota window when you have time to think.
+    prompt: >
+      I want to add a new feature to {{project}}. Help me write a product spec.
+      Start by asking me 3–4 clarifying questions about the feature, then draft
+      a spec covering: goal and motivation, non-goals, user stories, key
+      decisions and trade-offs, edge cases, and open questions that need answers
+      before implementation begins.
+    trigger: low_utilization_eow
+    show_every_n_days: 7
+    actions:
+      - copy_prompt
+      - open_cowork
+
+  - id: product002
+    category: product
+    title: "Draft a changelog entry for recent work"
+    description: >
+      Produces a clear, user-facing changelog entry based on recent commits or
+      session history. Keeps the project changelog current without the friction
+      of writing it from scratch.
+    prompt: >
+      Review the recent commit history or session notes for {{project}} and
+      draft a changelog entry for the work done this week. Use a clear,
+      user-facing tone. Group changes by type: new features, improvements,
+      bug fixes, and breaking changes if any.
+    trigger: always
+    show_every_n_days: 7
+    actions:
+      - copy_prompt
+      - open_cowork
+
+  - id: product003
+    category: product
+    title: "Write acceptance criteria for a feature"
+    description: >
+      Clear acceptance criteria prevent ambiguity at review time and make it
+      obvious when a feature is actually done. This prompt produces testable,
+      unambiguous criteria for a feature you describe.
+    prompt: >
+      Help me write acceptance criteria for a feature in {{project}}. Ask me
+      to describe the feature first, then produce a set of acceptance criteria
+      that are specific, testable, and cover the happy path, edge cases, and
+      failure states.
+    trigger: always
+    show_every_n_days: 5
+    actions:
+      - copy_prompt
+      - open_cowork
+
+# ───────────────────────────────────────────────────────────────────────────────
+# MAINTENANCE
+# Suggestions for keeping your computer, files, and project structure clean
+# and organised. These do not require an active coding project — {{project}}
+# may be unused or resolve to empty string, which is fine for these prompts.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: maintenance001
+    category: maintenance
+    title: "Declutter your Downloads folder"
+    description: >
+      The Downloads folder accumulates quickly. This prompt walks through
+      what is there, groups items by type and age, and helps you decide what
+      to delete, archive, or move somewhere intentional — without removing
+      anything without asking first.
+    prompt: >
+      List the contents of my Downloads folder grouped by file type and last
+      modified date. Identify anything that is clearly safe to delete:
+      installer files, duplicate downloads, and files older than 90 days with
+      no obvious ongoing value. Present a summary and ask for confirmation
+      before removing anything.
+    trigger: always
+    show_every_n_days: 30
+    actions:
+      - copy_prompt
+      - open_cowork
+
+  - id: maintenance002
+    category: maintenance
+    title: "Clean up the Desktop"
+    description: >
+      A cluttered Desktop slows down navigation and makes screenshots
+      embarrassing. This prompt sorts what is there and suggests a tidy
+      structure — with your approval before anything moves.
+    prompt: >
+      List everything on my Desktop. Group items by type and suggest which
+      should be deleted, moved to a more appropriate folder, or kept on the
+      Desktop with a better name. Propose a clean Desktop structure and ask
+      before making any changes.
+    trigger: always
+    show_every_n_days: 21
+    actions:
+      - copy_prompt
+      - open_cowork
+
+  - id: maintenance003
+    category: maintenance
+    title: "Archive old project folders in Documents"
+    description: >
+      Old project folders that are no longer active take up space and make it
+      harder to find current work. This prompt identifies candidates for
+      archiving based on last-modified date.
+    prompt: >
+      List folders in my Documents directory that haven't been modified in
+      more than 90 days. For each, suggest whether it should be archived,
+      deleted, or kept active. Propose an archive folder structure. Do not
+      move or delete anything without asking first.
+    trigger: always
+    show_every_n_days: 30
+    actions:
+      - copy_prompt
+      - open_cowork
+
+  - id: maintenance004
+    category: maintenance
+    title: "Find large files consuming disk space"
+    description: >
+      Surfaces the largest files on your system so you can make informed
+      decisions about what to delete, compress, or move to external storage.
+      Nothing is deleted — this is a survey only.
+    prompt: >
+      Write and run a script that finds the 20 largest files on my Mac,
+      excluding system files and application bundles. Show each file's size,
+      path, and last modified date. Group by category where possible (video,
+      archives, disk images, etc.). Do not delete anything.
+    trigger: always
+    show_every_n_days: 30
+    actions:
+      - copy_prompt
+      - open_cowork
+
+# ───────────────────────────────────────────────────────────────────────────────
+# PRODUCTIVITY
+# Suggestions for planning, reflection, and knowledge capture. Timed around
+# the quota reset cycle — post_reset for planning, low_utilization_eow for
+# reflection, always for ongoing capture.
+# ───────────────────────────────────────────────────────────────────────────────
+
+  - id: productivity001
+    category: productivity
+    title: "Plan priorities for your new quota window"
+    description: >
+      Your weekly quota just reset. A short planning session now means you
+      use your capacity intentionally rather than reactively — and makes it
+      less likely you reach the end of the week with quota left over.
+    prompt: >
+      My Claude Pro quota just reset for the week. I have been working mainly
+      in {{project}}. Ask me 2–3 questions to understand my current priorities,
+      then help me identify the top 3 ways to use Claude effectively this week
+      — balancing quick wins with longer tasks that benefit from a full session.
+    trigger: post_reset
+    show_every_n_days: 7
+    actions:
+      - copy_prompt
+      - open_cowork
+
+  - id: productivity002
+    category: productivity
+    title: "Write a weekly retrospective"
+    description: >
+      A short written retrospective at the end of a quota cycle helps you see
+      what you accomplished, where Claude was most useful, and what to do
+      differently next week.
+    prompt: >
+      Help me write a brief weekly retrospective. Ask me 3 questions about
+      what I worked on this week in {{project}}, what went well, and what I
+      would do differently. Then produce a short written summary I can save
+      or share.
+    trigger: low_utilization_eow
+    show_every_n_days: 7
+    actions:
+      - copy_prompt
+      - open_cowork
+
+  - id: productivity003
+    category: productivity
+    title: "Capture what you learned this week"
+    description: >
+      Knowledge that isn't written down is easily lost. This prompt turns what
+      you worked on into a short written note you can refer back to in weeks
+      or months.
+    prompt: >
+      I have been working on {{project}} this week. Help me capture what I
+      learned. Ask me a few questions about the problems I solved and the
+      decisions I made, then produce a short knowledge note — something I
+      could read in three months and quickly understand what I was doing
+      and why.
+    trigger: always
+    show_every_n_days: 7
+    actions:
+      - copy_prompt
+      - open_cowork
