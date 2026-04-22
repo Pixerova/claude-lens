@@ -145,6 +145,10 @@ def _on_poller_update(snapshot) -> None:
     against the previous one for post_reset detection.
     """
     global _prior_weekly_pct, _prior_recorded_at, _prev_latest
+    # Both reads (_prior_*) and writes (_prev_latest) happen on the asyncio event
+    # loop — the poller's callback runs inside its async task, and get_suggestions()
+    # runs on the same loop — so no lock is needed. If the poller moves to a thread,
+    # protect these globals with asyncio.Lock.
     # Move the previously staged reading into "prior" (visible to trigger eval).
     if _prev_latest is not None:
         _prior_weekly_pct, _prior_recorded_at = _prev_latest
@@ -462,7 +466,7 @@ def get_suggestions():
           "description": "...",
           "prompt": "...",          # {{project}} already resolved
           "trigger": "low_utilization_eow",
-          "actions": ["copy_prompt", "open_cowork", "open_claude_code"]
+          "actions": ["copy_prompt", "open_cowork"]
         }
       ],
       "trigger_context": {
@@ -495,16 +499,13 @@ def get_suggestions():
     )
     trigger_context = build_trigger_context(weekly_pct, weekly_resets, active_triggers)
 
-    conn = db.get_connection()
-    try:
+    with db._get_conn() as conn:
         eligible = get_eligible_suggestions(
             all_suggestions=_all_suggestions,
             active_triggers=active_triggers,
             conn=conn,
             config=_config,
         )
-    finally:
-        conn.close()
 
     return {
         "suggestions": [

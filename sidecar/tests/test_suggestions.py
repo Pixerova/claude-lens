@@ -666,36 +666,6 @@ def _make_mock_poller(weekly_pct: float = 0.30) -> MagicMock:
     return poller
 
 
-def _app_client(isolated_db, weekly_pct: float = 0.30):
-    """Context manager: TestClient with sidecar side-effects mocked out."""
-    import main as _main
-
-    mock_watcher = MagicMock()
-    mock_poller = _make_mock_poller(weekly_pct)
-
-    patches = [
-        patch("main.scan_all_sessions"),
-        patch("main.start_watchers", return_value=mock_watcher),
-        patch("main.UsagePoller", return_value=mock_poller),
-        patch(
-            "main.load_suggestions",
-            side_effect=lambda: load_suggestions(user_yaml_path=_BUNDLED_YAML),
-        ),
-    ]
-    for p in patches:
-        p.start()
-
-    client = TestClient(_main.app)
-    client.__enter__()
-
-    def stop():
-        client.__exit__(None, None, None)
-        for p in reversed(patches):
-            p.stop()
-
-    client._stop = stop
-    return client, stop
-
 
 class TestSuggestionsEndpoint:
     """

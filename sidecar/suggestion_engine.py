@@ -107,7 +107,7 @@ def _in_cooldown(suggestion: dict, history: dict[str, dict]) -> bool:
         return False
     try:
         last_shown = datetime.fromisoformat(rec["shown_at"].replace("Z", "+00:00"))
-        next_ok = last_shown + timedelta(days=int(suggestion["show_every_n_days"]))
+        next_ok = last_shown + timedelta(days=float(suggestion["show_every_n_days"]))
         return datetime.now(tz=timezone.utc) < next_ok
     except (ValueError, TypeError):
         return False

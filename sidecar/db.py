@@ -10,6 +10,7 @@ Tables:
 
 import hashlib
 import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -144,8 +145,12 @@ def _reset_if_schema_changed(conn: sqlite3.Connection) -> None:
     conn.commit()
 
     # Persist the new hash so the next startup is a no-op.
+    # Atomic write: write to a temp file then rename, so a crash between the
+    # DROP TABLE commit and this write can never leave a partially-written hash.
     _ensure_data_dir()
-    hash_path.write_text(current)
+    tmp = hash_path.with_suffix(".tmp")
+    tmp.write_text(current + "\n")
+    os.replace(tmp, hash_path)
     log.info("Schema hash updated to %s", current)
 
 

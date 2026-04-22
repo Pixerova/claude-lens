@@ -42,6 +42,9 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
   const [showDismissSheet, setShowDismissSheet] = useState(false);
   const [copyConfirmed, setCopyConfirmed] = useState(false);
   const [openConfirmed, setOpenConfirmed] = useState(false);
+  const [openHovered, setOpenHovered] = useState(false);
+  const [copyHovered, setCopyHovered] = useState(false);
+  const [dismissHovered, setDismissHovered] = useState(false);
 
   const shownRecorded = useRef(false);
   const shownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -231,11 +234,11 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 borderRadius: "3px",
                 border: "none",
                 cursor: "pointer",
-                background: openConfirmed ? "#22c55e" : "#f5c200",
+                background: openConfirmed ? "#22c55e" : openHovered ? "#ffe033" : "#f5c200",
                 color: "#000",
               }}
-              onMouseEnter={e => { if (!openConfirmed) (e.currentTarget as HTMLElement).style.background = "#ffe033"; }}
-              onMouseLeave={e => { if (!openConfirmed) (e.currentTarget as HTMLElement).style.background = "#f5c200"; }}
+              onMouseEnter={() => setOpenHovered(true)}
+              onMouseLeave={() => setOpenHovered(false)}
             >
               {openConfirmed ? "✓ Opened" : "Open in Claude"}
             </button>
@@ -250,10 +253,10 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 cursor: "pointer",
                 background: "transparent",
                 color: copyConfirmed ? "#22c55e" : "#ffffff",
-                border: copyConfirmed ? "1px solid #22c55e" : "1px solid #2a2a2a",
+                border: copyConfirmed ? "1px solid #22c55e" : copyHovered ? "1px solid #555" : "1px solid #2a2a2a",
               }}
-              onMouseEnter={e => { if (!copyConfirmed) (e.currentTarget as HTMLElement).style.borderColor = "#555"; }}
-              onMouseLeave={e => { if (!copyConfirmed) (e.currentTarget as HTMLElement).style.borderColor = "#2a2a2a"; }}
+              onMouseEnter={() => setCopyHovered(true)}
+              onMouseLeave={() => setCopyHovered(false)}
             >
               {copyConfirmed ? "✓ Copied" : "Copy Prompt"}
             </button>
@@ -267,17 +270,11 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 borderRadius: "3px",
                 cursor: "pointer",
                 background: "transparent",
-                color: "#555",
-                border: "1px solid #222",
+                color: dismissHovered ? "#aaa" : "#555",
+                border: dismissHovered ? "1px solid #666" : "1px solid #222",
               }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = "#666";
-                (e.currentTarget as HTMLElement).style.color = "#aaa";
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = "#222";
-                (e.currentTarget as HTMLElement).style.color = "#555";
-              }}
+              onMouseEnter={() => setDismissHovered(true)}
+              onMouseLeave={() => setDismissHovered(false)}
             >
               ×
             </button>
