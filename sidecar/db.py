@@ -105,6 +105,8 @@ CREATE TABLE IF NOT EXISTS suggestion_history (
 CREATE INDEX IF NOT EXISTS idx_snapshots_time   ON plan_usage_snapshots(recorded_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_start   ON session_summaries(started_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_source  ON session_summaries(source);
+CREATE INDEX IF NOT EXISTS idx_suggestion_history_sid
+    ON suggestion_history(suggestion_id, shown_at DESC);
 """
 
 
@@ -234,26 +236,6 @@ def upsert_session_summary(
                  title, input_tokens, output_tokens,
                  cache_read_tokens, cache_write_tokens,
                  now),
-            )
-
-
-
-def dismiss_suggestion(suggestion_id: int) -> None:
-    now = datetime.now(timezone.utc).isoformat()
-    with _get_conn() as conn:
-        with conn:
-            conn.execute(
-                "UPDATE suggestion_history SET dismissed_at = ? WHERE id = ?",
-                (now, suggestion_id),
-            )
-
-
-def mark_suggestion_acted(suggestion_id: int) -> None:
-    with _get_conn() as conn:
-        with conn:
-            conn.execute(
-                "UPDATE suggestion_history SET acted_on = 1 WHERE id = ?",
-                (suggestion_id,),
             )
 
 

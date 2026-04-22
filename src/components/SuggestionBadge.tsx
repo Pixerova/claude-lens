@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 interface SuggestionBadgeProps {
   count: number;
@@ -6,6 +6,8 @@ interface SuggestionBadgeProps {
 }
 
 export const SuggestionBadge: React.FC<SuggestionBadgeProps> = ({ count, onView }) => {
+  const [viewHovered, setViewHovered] = useState(false);
+
   if (count === 0) return null;
 
   return (
@@ -27,15 +29,15 @@ export const SuggestionBadge: React.FC<SuggestionBadgeProps> = ({ count, onView 
         className="font-mono font-bold uppercase tracking-[0.1em] transition-colors"
         style={{
           fontSize: "9px",
-          background: "#f5c200",
+          background: viewHovered ? "#ffe033" : "#f5c200",
           color: "#000",
           border: "none",
           borderRadius: "4px",
           padding: "5px 10px",
           cursor: "pointer",
         }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#ffe033"}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#f5c200"}
+        onMouseEnter={() => setViewHovered(true)}
+        onMouseLeave={() => setViewHovered(false)}
       >
         VIEW →
       </button>

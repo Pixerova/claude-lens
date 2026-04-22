@@ -22,8 +22,8 @@ const TRIGGER_LABELS: Record<string, string> = {
 function tomorrowAt9am(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 0, 0);
-  return d.toISOString();
+  d.setHours(9, 0, 0, 0); // 9 AM in the user's local timezone
+  return d.toISOString(); // converts to UTC ISO — sidecar compares in UTC
 }
 
 interface SuggestionCardProps {

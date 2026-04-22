@@ -13,6 +13,7 @@ export const SuggestionTray: React.FC<SuggestionTrayProps> = ({ suggestions, usa
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
+  const [backHovered, setBackHovered] = useState(false);
 
   const activeCards = suggestions.filter(s => !dismissedIds.has(s.id));
   const total = suggestions.length;
@@ -56,15 +57,15 @@ export const SuggestionTray: React.FC<SuggestionTrayProps> = ({ suggestions, usa
           className="font-mono font-bold uppercase tracking-[0.1em] transition-colors"
           style={{
             fontSize: "11px",
-            background: "#f5c200",
+            background: backHovered ? "#ffe033" : "#f5c200",
             color: "#000",
             border: "none",
             borderRadius: "4px",
             padding: "5px 10px",
             cursor: "pointer",
           }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#ffe033"}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#f5c200"}
+          onMouseEnter={() => setBackHovered(true)}
+          onMouseLeave={() => setBackHovered(false)}
         >
           ← Stats
         </button>
@@ -76,8 +77,8 @@ export const SuggestionTray: React.FC<SuggestionTrayProps> = ({ suggestions, usa
         </span>
       </div>
 
-      {/* Card list */}
-      <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
+      {/* Card list — flex: 1 fills remaining height after tiles and header */}
+      <div className="overflow-y-auto" style={{ flex: 1, minHeight: 0 }}>
         {activeCards.length === 0 ? (
           <div
             className="flex flex-col items-center justify-center px-[14px] py-[40px]"
