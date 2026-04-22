@@ -190,6 +190,10 @@ export default function App() {
     ? (new Date(usage.weeklyResetsAt).getTime() - Date.now()) / (1000 * 3600)
     : Infinity;
   // "Use it or lose it" — more than half the quota left past the week's midpoint
+  // TODO: 84h fires the frontend nudge slightly before the backend's first tier (72h/70%).
+  // This value is intentionally different — frontend surfaces awareness earlier — but is
+  // duplicated from the sidecar's trigger config. Revisit: expose a flag from GET /suggestions
+  // so the threshold is defined once and both layers stay in sync.
   const isUnderutilizing = usage !== null && usage.weeklyPct < 0.50 && hoursUntilWeeklyReset <= 84;
 
   const localCostWeek = totalCostUsd(bySource);

@@ -232,21 +232,6 @@ def upsert_session_summary(
             )
 
 
-def store_suggestion(trigger_rule: str, suggestion_text: str) -> int:
-    """Log a suggestion shown to the user. Returns the new row id."""
-    now = datetime.now(timezone.utc).isoformat()
-    with _get_conn() as conn:
-        with conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO suggestion_history (shown_at, trigger_rule, suggestion_text)
-                VALUES (?, ?, ?)
-                """,
-                (now, trigger_rule, suggestion_text),
-            )
-            row_id = cursor.lastrowid
-    return row_id
-
 
 def dismiss_suggestion(suggestion_id: int) -> None:
     now = datetime.now(timezone.utc).isoformat()

@@ -80,8 +80,10 @@ def _load_history(conn: sqlite3.Connection) -> dict[str, dict]:
         rows = conn.execute(
             """
             SELECT   suggestion_id,
-                     MAX(shown_at)       AS last_shown_at,
-                     MAX(snoozed_until)  AS snoozed_until
+                     MAX(shown_at) AS last_shown_at,
+                     (SELECT snoozed_until FROM suggestion_history h2
+                      WHERE  h2.suggestion_id = suggestion_history.suggestion_id
+                      ORDER  BY shown_at DESC LIMIT 1) AS snoozed_until
             FROM     suggestion_history
             WHERE    suggestion_id IS NOT NULL
             GROUP BY suggestion_id
