@@ -82,6 +82,26 @@ export interface AuthStatus {
   message: string;
 }
 
+export interface Suggestion {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  prompt: string;
+  trigger: string;
+  actions: string[];
+}
+
+export interface SuggestionsResponse {
+  suggestions: Suggestion[];
+  trigger_context: {
+    low_utilization_eow: boolean;
+    post_reset: boolean;
+    weekly_pct: number;
+    hours_until_reset: number;
+  };
+}
+
 // ── Fetch helper ──────────────────────────────────────────────────────────────
 
 async function sidecarFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -142,5 +162,33 @@ export const api = {
   /** Check Keychain auth status. */
   getAuthStatus(): Promise<AuthStatus> {
     return sidecarFetch<AuthStatus>("/auth/status");
+  },
+
+  /** Current eligible suggestions from the rule engine. */
+  getSuggestions(): Promise<SuggestionsResponse> {
+    return sidecarFetch<SuggestionsResponse>("/suggestions");
+  },
+
+  /** Record that a suggestion was shown. */
+  markSuggestionShown(id: string): Promise<void> {
+    return sidecarFetch<void>(`/suggestions/${id}/shown`, { method: "POST" });
+  },
+
+  /** Record that the user acted on a suggestion. */
+  markSuggestionActedOn(id: string): Promise<void> {
+    return sidecarFetch<void>(`/suggestions/${id}/acted_on`, { method: "POST" });
+  },
+
+  /** Dismiss a suggestion permanently. */
+  dismissSuggestion(id: string): Promise<void> {
+    return sidecarFetch<void>(`/suggestions/${id}/dismissed`, { method: "POST" });
+  },
+
+  /** Snooze a suggestion until a given UTC ISO timestamp. */
+  snoozeSuggestion(id: string, until: string): Promise<void> {
+    return sidecarFetch<void>(`/suggestions/${id}/snoozed`, {
+      method: "POST",
+      body: JSON.stringify({ until }),
+    });
   },
 };

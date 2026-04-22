@@ -156,7 +156,7 @@ def _on_poller_update(snapshot) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _config, _poller, _poller_task, _watcher
+    global _config, _poller, _poller_task, _watcher, _all_suggestions, _suggestions_yaml_error
 
     # 1. Config
     _config = load_config()

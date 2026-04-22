@@ -15,11 +15,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { useUsage }    from "./hooks/useUsage";
 import { useSessions, totalCostUsd } from "./hooks/useSessions";
+import { useSuggestions } from "./hooks/useSuggestions";
 import { UsageTile }        from "./components/UsageTile";
 import { StaleIndicator }   from "./components/StaleIndicator";
 import { SessionList }      from "./components/SessionList";
 import { UsageChart }       from "./components/UsageChart";
 import { SuggestionBadge }  from "./components/SuggestionBadge";
+import { SuggestionTray }   from "./components/SuggestionTray";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -39,13 +41,6 @@ const IconChevronDown = () => (
 const IconChevronUp = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 15l-6-6-6 6"/>
-  </svg>
-);
-
-const IconBulb = ({ size = 15 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#ffd600" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21h6"/>
-    <path d="M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.16 6 11.22 6 9a6 6 0 0 1 6-6z"/>
   </svg>
 );
 
@@ -139,6 +134,7 @@ const ErrorPanel: React.FC<{ onRetry: () => void; loading: boolean }> = ({ onRet
 
 export default function App() {
   const [expanded, setExpanded] = useState(false);
+  const [showTray, setShowTray] = useState(false);
 
   const {
     usage,
@@ -161,6 +157,11 @@ export default function App() {
     await Promise.all([refreshUsage(), refreshSessions()]);
   }, [refreshUsage, refreshSessions]);
 
+  // Reset tray when widget collapses
+  useEffect(() => {
+    if (!expanded) setShowTray(false);
+  }, [expanded]);
+
   // Resize window to fit content
   useEffect(() => {
     const win = getCurrentWindow();
@@ -168,7 +169,7 @@ export default function App() {
     if (usageError) {
       height = 210; // header (~38) + ErrorPanel (~172)
     } else if (expanded) {
-      height = 580;
+      height = 660;
     } else if (usage?.isStale) {
       height = 296;
     } else {
@@ -183,13 +184,13 @@ export default function App() {
     getCurrentWindow().startDragging().catch(() => {});
   }, []);
 
-  // Suggestion count — stub for M5, always 0 until engine is wired
-  const suggestionCount = 0;
+  const { suggestions, count: suggestionCount } = useSuggestions(300_000, showTray);
 
-  const handleSuggest = useCallback(() => {
-    setExpanded(true);
-    // TODO(M5): scroll to / focus suggestion panel
-  }, []);
+  const hoursUntilWeeklyReset = usage
+    ? (new Date(usage.weeklyResetsAt).getTime() - Date.now()) / (1000 * 3600)
+    : Infinity;
+  // "Use it or lose it" — more than half the quota left past the week's midpoint
+  const isUnderutilizing = usage !== null && usage.weeklyPct < 0.50 && hoursUntilWeeklyReset <= 84;
 
   const localCostWeek = totalCostUsd(bySource);
   const showBrowserRow = usage !== null && bySource.length > 0 && usage.weeklyPct > 0;
@@ -248,11 +249,11 @@ export default function App() {
         {/* ── Collapsed view ───────────────────────────────────────────────── */}
         {!usageError && !expanded && (
           <>
-            {/* 2×2 tile grid */}
+            {/* Stat tiles — top row */}
             <div className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]">
               {usageLoading && !usage ? (
                 <>
-                  {[0, 1, 2, 3].map((i) => (
+                  {[0, 1].map((i) => (
                     <div
                       key={i}
                       className="rounded-[9px] min-h-[78px] bg-white/[0.07] animate-pulse"
@@ -264,43 +265,71 @@ export default function App() {
                 <>
                   <UsageTile type="session" pct={usage.sessionPct} resetsAt={usage.sessionResetsAt} />
                   <UsageTile type="weekly"  pct={usage.weeklyPct}  resetsAt={usage.weeklyResetsAt} style={{ animationDelay: "0.3s" }} />
-
-                  {/* Expand action tile */}
-                  <button
-                    onClick={() => setExpanded(true)}
-                    className="bg-tile-action border border-white/10 rounded-[9px] min-h-[78px] flex flex-col items-center justify-center gap-[7px] hover:bg-[#1e1e22] transition-colors cursor-pointer"
-                  >
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                    <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-white">
-                      Expand
-                    </span>
-                  </button>
-
-                  {/* Suggest action tile */}
-                  <button
-                    onClick={handleSuggest}
-                    className={`bg-tile-suggest rounded-[9px] min-h-[78px] flex flex-col items-center justify-center gap-[7px] hover:bg-[#1c1c10] transition-colors cursor-pointer ${
-                      suggestionCount > 0
-                        ? "border border-[rgba(255,210,0,0.45)]"
-                        : "border border-[rgba(255,210,0,0.22)]"
-                    }`}
-                  >
-                    <div className={`w-[30px] h-[30px] rounded-full flex items-center justify-center ${
-                      suggestionCount > 0
-                        ? "bg-[rgba(255,214,0,0.18)] border-[1.5px] border-[rgba(255,214,0,0.6)]"
-                        : "bg-[rgba(255,214,0,0.12)] border-[1.5px] border-[rgba(255,214,0,0.35)]"
-                    }`}>
-                      <IconBulb size={15} />
-                    </div>
-                    <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[#ffd600]">
-                      {suggestionCount > 0 ? `${suggestionCount} ready` : "Suggest"}
-                    </span>
-                  </button>
                 </>
               ) : null}
             </div>
+
+            {/* Bottom tile — full-width suggestion entry point */}
+            {usageLoading && !usage ? (
+              <div className="mx-[5px] mb-[3px] rounded-[9px] h-[54px] bg-white/[0.07] animate-pulse" style={{ animationDelay: "0.2s" }} />
+            ) : usage ? (
+              <button
+                onClick={() => setExpanded(true)}
+                className="w-full flex flex-row items-center justify-between px-[14px] py-[12px] cursor-pointer transition-colors"
+                style={{
+                  borderTop: "1px solid #1e1e1e",
+                  background: isUnderutilizing ? "#0e0b00" : "#161616",
+                }}
+              >
+                {/* Left: count + label stack */}
+                <div className="flex flex-row items-center gap-[8px]">
+                  <span
+                    className="font-sans font-black leading-none"
+                    style={{
+                      fontSize: isUnderutilizing ? "3.4rem" : "2.6rem",
+                      color: isUnderutilizing ? "#f5c200" : "#ffffff",
+                      animation: isUnderutilizing ? "num-pulse 3.5s ease-in-out infinite" : undefined,
+                    }}
+                  >
+                    {suggestionCount}
+                  </span>
+                  <div className="flex flex-col" style={{ gap: "1px" }}>
+                    <span
+                      className="font-mono font-bold uppercase tracking-[0.1em]"
+                      style={{ fontSize: "9.5px", color: isUnderutilizing ? "#aaa" : "#ffffff" }}
+                    >
+                      ideas
+                    </span>
+                    <span
+                      className="font-mono font-bold uppercase tracking-[0.1em]"
+                      style={{ fontSize: "9.5px", color: isUnderutilizing ? "#888" : "#ffffff" }}
+                    >
+                      waiting
+                    </span>
+                    {isUnderutilizing && (
+                      <span
+                        className="font-mono font-bold uppercase tracking-[0.1em]"
+                        style={{
+                          fontSize: "7.5px",
+                          color: "#b89000",
+                          animation: "text-glow 2.8s ease-in-out infinite",
+                        }}
+                      >
+                        use your quota
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right: expand cue */}
+                <span
+                  className="font-mono tracking-[0.08em] text-white"
+                  style={{ fontSize: "8px" }}
+                >
+                  expand →
+                </span>
+              </button>
+            ) : null}
 
             {/* Stale banner — collapsed */}
             {usage?.isStale && (
@@ -311,8 +340,13 @@ export default function App() {
           </>
         )}
 
+        {/* ── Suggestion tray ──────────────────────────────────────────────── */}
+        {!usageError && expanded && showTray && usage && (
+          <SuggestionTray suggestions={suggestions} usage={usage} onBack={() => setShowTray(false)} />
+        )}
+
         {/* ── Expanded view ────────────────────────────────────────────────── */}
-        {!usageError && expanded && (
+        {!usageError && expanded && !showTray && (
           <>
             {/* 1 — Full-size usage tiles */}
             <div className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]">
@@ -414,7 +448,7 @@ export default function App() {
             </div>
 
             {/* Suggestion footer */}
-            <SuggestionBadge count={suggestionCount} onView={() => {}} />
+            <SuggestionBadge count={suggestionCount} onView={() => setShowTray(true)} />
             {suggestionCount === 0 && <div className="pb-1" />}
           </>
         )}
