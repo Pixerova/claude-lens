@@ -56,7 +56,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
       shownTimer.current = setTimeout(() => {
         if (!shownRecorded.current) {
           shownRecorded.current = true;
-          api.markSuggestionShown(suggestion.id).catch(() => {});
+          api.markSuggestionShown(suggestion.id, suggestion.trigger).catch(() => {});
         }
       }, 2000);
     } else {
@@ -87,9 +87,9 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
         clearTimeout(shownTimer.current);
         shownTimer.current = null;
       }
-      api.markSuggestionShown(suggestion.id).catch(() => {});
+      api.markSuggestionShown(suggestion.id, suggestion.trigger).catch(() => {});
     }
-  }, [suggestion.id]);
+  }, [suggestion.id, suggestion.trigger]);
 
   const handleCopy = useCallback(async () => {
     recordShownIfNeeded();

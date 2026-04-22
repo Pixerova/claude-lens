@@ -525,14 +525,18 @@ def get_suggestions():
     }
 
 
+class SuggestionShownBody(BaseModel):
+    trigger: str = "rule_engine"
+
+
 @app.post("/suggestions/{suggestion_id}/shown")
-def suggestion_shown(suggestion_id: str):
+def suggestion_shown(suggestion_id: str, body: SuggestionShownBody = SuggestionShownBody()):
     """Record that a suggestion card was shown to the user.
 
     The shown_at timestamp written here is used by the cooldown filter to
     prevent the same suggestion from appearing too frequently.
     """
-    db.record_suggestion_shown(suggestion_id)
+    db.record_suggestion_shown(suggestion_id, trigger_rule=body.trigger)
     return {"status": "ok", "suggestion_id": suggestion_id}
 
 

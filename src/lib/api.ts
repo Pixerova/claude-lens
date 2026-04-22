@@ -170,8 +170,11 @@ export const api = {
   },
 
   /** Record that a suggestion was shown. */
-  markSuggestionShown(id: string): Promise<void> {
-    return sidecarFetch<void>(`/suggestions/${id}/shown`, { method: "POST" });
+  markSuggestionShown(id: string, trigger: string): Promise<void> {
+    return sidecarFetch<void>(`/suggestions/${id}/shown`, {
+      method: "POST",
+      body: JSON.stringify({ trigger }),
+    });
   },
 
   /** Record that the user acted on a suggestion. */

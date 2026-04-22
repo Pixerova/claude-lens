@@ -95,8 +95,7 @@ CREATE TABLE IF NOT EXISTS suggestion_history (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     shown_at         TEXT NOT NULL,
     trigger_rule     TEXT NOT NULL,
-    suggestion_text  TEXT NOT NULL,
-    suggestion_id    TEXT,
+    suggestion_id    TEXT NOT NULL,
     dismissed_at     TEXT,
     acted_on         INTEGER DEFAULT 0,
     snoozed_until    TEXT
@@ -253,10 +252,10 @@ def record_suggestion_shown(suggestion_id: str, trigger_rule: str = "rule_engine
             conn.execute(
                 """
                 INSERT INTO suggestion_history
-                    (shown_at, trigger_rule, suggestion_text, suggestion_id, acted_on)
-                VALUES (?, ?, ?, ?, 0)
+                    (shown_at, trigger_rule, suggestion_id, acted_on)
+                VALUES (?, ?, ?, 0)
                 """,
-                (now, trigger_rule, suggestion_id, suggestion_id),
+                (now, trigger_rule, suggestion_id),
             )
 
 
@@ -319,11 +318,11 @@ def record_suggestion_snoozed(suggestion_id: str, snoozed_until: str) -> None:
                 conn.execute(
                     """
                     INSERT INTO suggestion_history
-                        (shown_at, trigger_rule, suggestion_text, suggestion_id,
+                        (shown_at, trigger_rule, suggestion_id,
                          acted_on, snoozed_until)
-                    VALUES (?, 'rule_engine', ?, ?, 0, ?)
+                    VALUES (?, 'rule_engine', ?, 0, ?)
                     """,
-                    (now, suggestion_id, suggestion_id, snoozed_until),
+                    (now, suggestion_id, snoozed_until),
                 )
 
 
