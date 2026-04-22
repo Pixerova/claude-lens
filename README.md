@@ -1,4 +1,4 @@
-# Claude Lens
+# claude-lens
 
 > macOS widget for Claude Pro — real-time usage gauges, session insights, and smart suggestions to stop leaving weekly capacity on the table.
 
@@ -6,9 +6,9 @@
 
 ## What it is
 
-Claude Lens is a macOS menu bar app and floating overlay widget for Claude Pro subscribers. It shows your live plan limits (current session and weekly), breaks down usage by source (Claude Code vs Cowork), and surfaces AI-powered suggestions so you make the most of every reset window.
+claude-lens is a macOS menu bar app and floating overlay widget for Claude Pro subscribers. It shows your live plan limits (current session and weekly), breaks down usage by source (Claude Code vs Cowork), and surfaces AI-powered suggestions so you make the most of every reset window.
 
-Most Claude usage monitors answer: *"How much have I spent?"* Claude Lens answers: *"How much do I have left — and what should I do with it?"*
+Most Claude usage monitors answer: *"How much have I spent?"* claude-lens answers: *"How much do I have left — and what could I do with it?"*
 
 ## What it shows
 
@@ -33,9 +33,42 @@ Most Claude usage monitors answer: *"How much have I spent?"* Claude Lens answer
 
 ## How it works
 
-Claude Lens reads your live plan limits from the Anthropic OAuth API (via the token already stored in your macOS Keychain by Claude Code — no setup required). It parses local session files from Claude Code and Cowork to attribute that usage between sources. Everything stays on your machine.
+claude-lens reads your live plan limits from the Anthropic OAuth API (via the token already stored in your macOS Keychain by Claude Code — no setup required). It parses local session files from Claude Code and Cowork to attribute that usage between sources. Everything stays on your machine.
 
-The poll interval adapts dynamically: checking every minute when you're near a limit, backing off to once an hour when usage is low.
+The poll interval adapts dynamically: checking every couple minutes when you're near a limit, backing off to once an hour when usage is low.
+
+## Configuration
+
+claude-lens reads `~/.claudelens/config.json` on startup. The file is optional — all keys have defaults. Any keys you provide are deep-merged over the defaults, so you only need to include what you want to change.
+
+```json
+{
+  "hotkey": "Option+Space",
+  "retentionDays": 30,
+  "poll": {
+    "thresholds": {
+      "critical": { "above": 0.90, "intervalSec": 60 },
+      "high":     { "above": 0.80, "intervalSec": 120 },
+      "elevated": { "above": 0.60, "intervalSec": 300 },
+      "normal":   { "above": 0.20, "intervalSec": 600 },
+      "low":      { "above": 0.05, "intervalSec": 1800 },
+      "minimal":  { "above": 0.00, "intervalSec": 3600 }
+    }
+  }
+}
+```
+
+| Key | What it controls |
+|---|---|
+| `hotkey` | Global shortcut to show/hide the widget |
+| `retentionDays` | Days of session history to keep |
+| `poll.thresholds` | Adaptive API poll intervals — each tier fires when utilization is above the given fraction; the highest matching tier wins |
+| `warnings.amberPct` / `warnings.redPct` | Utilization % at which the widget transitions to amber / red |
+
+
+### Add your own suggestions
+
+Suggestion cards are defined in [`sidecar/data/suggestions.yaml`](sidecar/data/suggestions.yaml). The schema and contributing instructions are documented at the top of that file. To add your own cards, follow the schema, run `python sidecar/validate_suggestions.py` locally to check them, then restart the sidecar.
 
 ## Status
 
@@ -50,4 +83,4 @@ The poll interval adapts dynamically: checking every minute when you're near a l
 
 ## License
 
-MIT
+GNU GENERAL PUBLIC LICENSE Version 3

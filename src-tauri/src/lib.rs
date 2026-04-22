@@ -88,7 +88,7 @@ pub fn run() {
             }
 
             // 2. Build tray menu (right-click)
-            let show_item = MenuItem::with_id(app, "show", "Open Claude Lens", true, None::<&str>)?;
+            let show_item = MenuItem::with_id(app, "show", "Open claude-lens", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 

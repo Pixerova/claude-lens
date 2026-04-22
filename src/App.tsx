@@ -118,7 +118,7 @@ const ErrorPanel: React.FC<{ onRetry: () => void; loading: boolean }> = ({ onRet
     </div>
     <p className="text-[12px] font-bold text-danger">Cannot reach sidecar</p>
     <p className="font-mono text-[10px] text-white/50 leading-relaxed">
-      Make sure Claude Lens<br/>is running
+      Make sure claude-lens<br/>is running
     </p>
     <button
       onClick={onRetry}
@@ -232,7 +232,7 @@ export default function App() {
             <span className="font-mono text-[7px] font-bold text-white leading-none">CL</span>
           </div>
           <span className="text-[12px] font-semibold text-white flex-1 tracking-[-0.01em]">
-            Claude Lens
+            claude-lens
           </span>
           {usage?.isStale && (
             <div className="w-[7px] h-[7px] rounded-full bg-[#ffd200] animate-pulse shrink-0" title="Data may be stale" />

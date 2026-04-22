@@ -1,6 +1,6 @@
-# Claude Lens — Local Development Setup
+# claude-lens — Local Development Setup
 
-One-time bootstrap guide for running Claude Lens on your MacBook Pro.
+One-time bootstrap guide for running claude-lens on your MacBook Pro.
 
 ---
 
@@ -76,7 +76,7 @@ cargo install tauri-cli --version "^2.0"
 
 ---
 
-## Running in development mode
+## Running in development mode (requires 2 terminals)
 
 **Terminal 1 — Python sidecar:**
 ```bash
@@ -97,7 +97,7 @@ The floating widget window will appear. It fetches usage from the sidecar at `ht
 
 ## Authentication
 
-Claude Lens reads your OAuth token automatically from the macOS Keychain
+claude-lens reads your OAuth token automatically from the macOS Keychain
 (stored there by the Claude desktop app under `Claude Code-credentials`).
 
 To verify authentication is working:
