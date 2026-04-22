@@ -45,7 +45,14 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
   const [openHovered, setOpenHovered] = useState(false);
   const [copyHovered, setCopyHovered] = useState(false);
   const [dismissHovered, setDismissHovered] = useState(false);
+  const [snooze1hHovered, setSnooze1hHovered] = useState(false);
+  const [snoozeTomorrowHovered, setSnoozeTomorrowHovered] = useState(false);
+  const [dismissPermHovered, setDismissPermHovered] = useState(false);
+  const [cancelHovered, setCancelHovered] = useState(false);
 
+  // Persists for the lifetime of this component instance; guards against
+  // recording shown_at more than once per card mount even when the card
+  // collapses and re-expands or when an action fires before the timer.
   const shownRecorded = useRef(false);
   const shownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -314,13 +321,13 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                   fontSize: "13px",
                   color: "#aaa",
                   background: "#111",
-                  border: "1px solid #222",
+                  border: snooze1hHovered ? "1px solid #444" : "1px solid #222",
                   borderRadius: "3px",
                   padding: "9px 12px",
                   cursor: "pointer",
                 }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = "#444"}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = "#222"}
+                onMouseEnter={() => setSnooze1hHovered(true)}
+                onMouseLeave={() => setSnooze1hHovered(false)}
               >
                 Snooze 1 hour
               </button>
@@ -331,13 +338,13 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                   fontSize: "13px",
                   color: "#aaa",
                   background: "#111",
-                  border: "1px solid #222",
+                  border: snoozeTomorrowHovered ? "1px solid #444" : "1px solid #222",
                   borderRadius: "3px",
                   padding: "9px 12px",
                   cursor: "pointer",
                 }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = "#444"}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = "#222"}
+                onMouseEnter={() => setSnoozeTomorrowHovered(true)}
+                onMouseLeave={() => setSnoozeTomorrowHovered(false)}
               >
                 Snooze until tomorrow
               </button>
@@ -347,20 +354,14 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 style={{
                   fontSize: "13px",
                   color: "#ef4444",
-                  background: "#111",
-                  border: "1px solid #222",
+                  background: dismissPermHovered ? "#1a0505" : "#111",
+                  border: dismissPermHovered ? "1px solid #ef4444" : "1px solid #222",
                   borderRadius: "3px",
                   padding: "9px 12px",
                   cursor: "pointer",
                 }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#ef4444";
-                  (e.currentTarget as HTMLElement).style.background = "#1a0505";
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#222";
-                  (e.currentTarget as HTMLElement).style.background = "#111";
-                }}
+                onMouseEnter={() => setDismissPermHovered(true)}
+                onMouseLeave={() => setDismissPermHovered(false)}
               >
                 Dismiss permanently
               </button>
@@ -370,14 +371,14 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
               className="font-mono uppercase w-full text-center transition-colors"
               style={{
                 fontSize: "11px",
-                color: "#555",
+                color: cancelHovered ? "#888" : "#555",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
                 marginTop: "8px",
               }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#888"}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#555"}
+              onMouseEnter={() => setCancelHovered(true)}
+              onMouseLeave={() => setCancelHovered(false)}
             >
               Cancel
             </button>

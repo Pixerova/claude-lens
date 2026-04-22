@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import sqlite3
 import textwrap
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -667,6 +668,26 @@ def _make_mock_poller(weekly_pct: float = 0.30) -> MagicMock:
 
 
 
+@contextmanager
+def _suggestions_client(weekly_pct: float = 0.30, extra_patches=None):
+    """Yield a TestClient with the standard sidecar startup mocks applied."""
+    import main as _main
+    poller = _make_mock_poller(weekly_pct=weekly_pct)
+    patches = [
+        patch("main.scan_all_sessions"),
+        patch("main.start_watchers", return_value=MagicMock()),
+        patch("main.UsagePoller", return_value=poller),
+        patch("main.load_suggestions",
+              side_effect=lambda: load_suggestions(user_yaml_path=_BUNDLED_YAML)),
+        *(extra_patches or []),
+    ]
+    with ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
+        with TestClient(_main.app) as client:
+            yield _main, client
+
+
 class TestSuggestionsEndpoint:
     """
     Integration tests for GET /suggestions via FastAPI TestClient.
@@ -679,18 +700,8 @@ class TestSuggestionsEndpoint:
 
     def test_always_suggestions_returned(self, isolated_db):
         """Endpoint returns suggestions when always trigger is active."""
-        import main as _main
-
-        mock_poller = _make_mock_poller(weekly_pct=0.30)
-        mock_watcher = MagicMock()
-
-        with patch("main.scan_all_sessions"), \
-             patch("main.start_watchers", return_value=mock_watcher), \
-             patch("main.UsagePoller", return_value=mock_poller), \
-             patch("main.load_suggestions",
-                   side_effect=lambda: load_suggestions(user_yaml_path=_BUNDLED_YAML)):
-            with TestClient(_main.app) as client:
-                resp = client.get("/suggestions")
+        with _suggestions_client(weekly_pct=0.30) as (_main, client):
+            resp = client.get("/suggestions")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -702,18 +713,8 @@ class TestSuggestionsEndpoint:
 
     def test_suggestions_have_required_fields(self, isolated_db):
         """Each returned suggestion has the fields the frontend expects."""
-        import main as _main
-
-        mock_poller = _make_mock_poller()
-        mock_watcher = MagicMock()
-
-        with patch("main.scan_all_sessions"), \
-             patch("main.start_watchers", return_value=mock_watcher), \
-             patch("main.UsagePoller", return_value=mock_poller), \
-             patch("main.load_suggestions",
-                   side_effect=lambda: load_suggestions(user_yaml_path=_BUNDLED_YAML)):
-            with TestClient(_main.app) as client:
-                resp = client.get("/suggestions")
+        with _suggestions_client() as (_main, client):
+            resp = client.get("/suggestions")
 
         for s in resp.json()["suggestions"]:
             assert "id" in s
@@ -727,21 +728,13 @@ class TestSuggestionsEndpoint:
     def test_suggestions_disabled_returns_empty(self, isolated_db):
         """suggestions.enabled=false short-circuits the engine and returns []."""
         import main as _main
-
         disabled_config = {**_main.DEFAULT_CONFIG}
         disabled_config["suggestions"] = {**disabled_config["suggestions"], "enabled": False}
 
-        mock_poller = _make_mock_poller()
-        mock_watcher = MagicMock()
-
-        with patch("main.scan_all_sessions"), \
-             patch("main.start_watchers", return_value=mock_watcher), \
-             patch("main.UsagePoller", return_value=mock_poller), \
-             patch("main.load_suggestions",
-                   side_effect=lambda: load_suggestions(user_yaml_path=_BUNDLED_YAML)), \
-             patch("main.load_config", return_value=disabled_config):
-            with TestClient(_main.app) as client:
-                resp = client.get("/suggestions")
+        with _suggestions_client(
+            extra_patches=[patch("main.load_config", return_value=disabled_config)]
+        ) as (_main, client):
+            resp = client.get("/suggestions")
 
         assert resp.status_code == 200
         assert resp.json()["suggestions"] == []
@@ -749,20 +742,12 @@ class TestSuggestionsEndpoint:
     def test_capped_at_max_visible(self, isolated_db):
         """Endpoint returns no more suggestions than maxVisible."""
         import main as _main
-
         config = {**_main.DEFAULT_CONFIG}
         config["suggestions"] = {**config["suggestions"], "maxVisible": 2}
 
-        mock_poller = _make_mock_poller()
-        mock_watcher = MagicMock()
-
-        with patch("main.scan_all_sessions"), \
-             patch("main.start_watchers", return_value=mock_watcher), \
-             patch("main.UsagePoller", return_value=mock_poller), \
-             patch("main.load_suggestions",
-                   side_effect=lambda: load_suggestions(user_yaml_path=_BUNDLED_YAML)), \
-             patch("main.load_config", return_value=config):
-            with TestClient(_main.app) as client:
-                resp = client.get("/suggestions")
+        with _suggestions_client(
+            extra_patches=[patch("main.load_config", return_value=config)]
+        ) as (_main, client):
+            resp = client.get("/suggestions")
 
         assert len(resp.json()["suggestions"]) <= 2

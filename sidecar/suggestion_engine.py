@@ -6,12 +6,13 @@ Selection algorithm: filter → sort → resolve → return top N.
 Pipeline (SPEC §12.5):
   1. Filter to suggestions whose trigger is in active_triggers.
   2. Filter out suggestions within their show_every_n_days cooldown.
-  3. Filter out snoozed suggestions.
-  4. Sort: trigger-specific first (low_utilization_eow, post_reset), then always;
+  3. Filter out dismissed suggestions.
+  4. Filter out snoozed suggestions.
+  5. Sort: trigger-specific first (low_utilization_eow, post_reset), then always;
      within each group, LRU (NULL shown_at first, then oldest shown_at).
-  5. Take top N (config.suggestions.maxVisible, default 5).
-  6. Resolve {{project}} in each prompt.
-  7. Return full dicts with resolved prompt.
+  6. Take top N (config.suggestions.maxVisible, default 5).
+  7. Resolve {{project}} in each prompt.
+  8. Return full dicts with resolved prompt.
 """
 
 from __future__ import annotations
@@ -191,7 +192,7 @@ def get_eligible_suggestions(
     after_snooze = [s for s in after_dismiss if not _is_snoozed(s, history)]
     # 5. Sort
     sorted_list = sorted(after_snooze, key=lambda s: _sort_key(s, history))
-    # 5. Cap
+    # 6. Cap
     selected = sorted_list[:max_visible]
 
     # 6 & 7. Resolve and return
