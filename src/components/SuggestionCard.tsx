@@ -225,41 +225,45 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
           {/* Action bar */}
           <div className="flex items-center" style={{ gap: "6px" }}>
-            <button
-              onClick={handleOpen}
-              className="font-mono font-bold uppercase tracking-[0.08em] flex-1 transition-colors"
-              style={{
-                fontSize: "11px",
-                padding: "6px 10px",
-                borderRadius: "3px",
-                border: "none",
-                cursor: "pointer",
-                background: openConfirmed ? "#22c55e" : openHovered ? "#ffe033" : "#f5c200",
-                color: "#000",
-              }}
-              onMouseEnter={() => setOpenHovered(true)}
-              onMouseLeave={() => setOpenHovered(false)}
-            >
-              {openConfirmed ? "✓ Opened" : "Open in Claude"}
-            </button>
+            {suggestion.actions.includes("open_cowork") && (
+              <button
+                onClick={handleOpen}
+                className="font-mono font-bold uppercase tracking-[0.08em] flex-1 transition-colors"
+                style={{
+                  fontSize: "11px",
+                  padding: "6px 10px",
+                  borderRadius: "3px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: openConfirmed ? "#22c55e" : openHovered ? "#ffe033" : "#f5c200",
+                  color: "#000",
+                }}
+                onMouseEnter={() => setOpenHovered(true)}
+                onMouseLeave={() => setOpenHovered(false)}
+              >
+                {openConfirmed ? "✓ Opened" : "Open in Claude"}
+              </button>
+            )}
 
-            <button
-              onClick={handleCopy}
-              className="font-mono font-bold uppercase tracking-[0.08em] flex-1 transition-colors"
-              style={{
-                fontSize: "11px",
-                padding: "6px 10px",
-                borderRadius: "3px",
-                cursor: "pointer",
-                background: "transparent",
-                color: copyConfirmed ? "#22c55e" : "#ffffff",
-                border: copyConfirmed ? "1px solid #22c55e" : copyHovered ? "1px solid #555" : "1px solid #2a2a2a",
-              }}
-              onMouseEnter={() => setCopyHovered(true)}
-              onMouseLeave={() => setCopyHovered(false)}
-            >
-              {copyConfirmed ? "✓ Copied" : "Copy Prompt"}
-            </button>
+            {suggestion.actions.includes("copy_prompt") && (
+              <button
+                onClick={handleCopy}
+                className="font-mono font-bold uppercase tracking-[0.08em] flex-1 transition-colors"
+                style={{
+                  fontSize: "11px",
+                  padding: "6px 10px",
+                  borderRadius: "3px",
+                  cursor: "pointer",
+                  background: "transparent",
+                  color: copyConfirmed ? "#22c55e" : "#ffffff",
+                  border: copyConfirmed ? "1px solid #22c55e" : copyHovered ? "1px solid #555" : "1px solid #2a2a2a",
+                }}
+                onMouseEnter={() => setCopyHovered(true)}
+                onMouseLeave={() => setCopyHovered(false)}
+              >
+                {copyConfirmed ? "✓ Copied" : "Copy Prompt"}
+              </button>
+            )}
 
             <button
               onClick={() => setShowDismissSheet(true)}

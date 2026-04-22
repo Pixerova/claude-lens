@@ -12,7 +12,10 @@ export function useSuggestions(pollIntervalMs = 300_000, paused = false): UseSug
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (paused) return;
+    if (paused) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
 

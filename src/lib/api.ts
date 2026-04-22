@@ -95,11 +95,13 @@ export interface Suggestion {
 export interface SuggestionsResponse {
   suggestions: Suggestion[];
   trigger_context: {
+    always: boolean;
     low_utilization_eow: boolean;
     post_reset: boolean;
     weekly_pct: number;
     hours_until_reset: number;
   };
+  yaml_error?: string | null;
 }
 
 // ── Fetch helper ──────────────────────────────────────────────────────────────

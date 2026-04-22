@@ -525,6 +525,12 @@ def get_suggestions():
     }
 
 
+def _require_known_suggestion(suggestion_id: str) -> None:
+    known = {s["id"] for s in _all_suggestions}
+    if suggestion_id not in known:
+        raise HTTPException(status_code=404, detail=f"Unknown suggestion_id: {suggestion_id!r}")
+
+
 class SuggestionShownBody(BaseModel):
     trigger: str = "rule_engine"
 
@@ -536,6 +542,7 @@ def suggestion_shown(suggestion_id: str, body: SuggestionShownBody = SuggestionS
     The shown_at timestamp written here is used by the cooldown filter to
     prevent the same suggestion from appearing too frequently.
     """
+    _require_known_suggestion(suggestion_id)
     db.record_suggestion_shown(suggestion_id, trigger_rule=body.trigger)
     return {"status": "ok", "suggestion_id": suggestion_id}
 
@@ -543,6 +550,7 @@ def suggestion_shown(suggestion_id: str, body: SuggestionShownBody = SuggestionS
 @app.post("/suggestions/{suggestion_id}/acted_on")
 def suggestion_acted_on(suggestion_id: str):
     """Record that the user acted on a suggestion (copied prompt, opened app, etc.)."""
+    _require_known_suggestion(suggestion_id)
     db.record_suggestion_acted_on(suggestion_id)
     return {"status": "ok", "suggestion_id": suggestion_id}
 
@@ -550,6 +558,7 @@ def suggestion_acted_on(suggestion_id: str):
 @app.post("/suggestions/{suggestion_id}/dismissed")
 def suggestion_dismissed(suggestion_id: str):
     """Record that the user dismissed a suggestion card."""
+    _require_known_suggestion(suggestion_id)
     db.record_suggestion_dismissed(suggestion_id)
     return {"status": "ok", "suggestion_id": suggestion_id}
 
@@ -564,6 +573,7 @@ def suggestion_snoozed(suggestion_id: str, body: SnoozeRequest):
 
     Body: { "until": "<ISO 8601 UTC>" }
     """
+    _require_known_suggestion(suggestion_id)
     try:
         datetime.fromisoformat(body.until.replace("Z", "+00:00"))
     except ValueError:

@@ -70,10 +70,10 @@ def resolve_prompt(prompt: str, project: Optional[str]) -> str:
 # ── History queries ───────────────────────────────────────────────────────────
 
 def _load_history(conn: sqlite3.Connection) -> dict[str, dict]:
-    """Return latest shown_at and snoozed_until per suggestion_id.
+    """Return latest shown_at, snoozed_until, and dismissed_at per suggestion_id.
 
     Returns:
-        {"testing001": {"shown_at": "...", "snoozed_until": "..."}, ...}
+        {"testing001": {"shown_at": "...", "snoozed_until": "...", "dismissed_at": "..."}, ...}
     """
     history: dict[str, dict] = {}
     try:
@@ -83,9 +83,9 @@ def _load_history(conn: sqlite3.Connection) -> dict[str, dict]:
                      MAX(shown_at) AS last_shown_at,
                      (SELECT snoozed_until FROM suggestion_history h2
                       WHERE  h2.suggestion_id = suggestion_history.suggestion_id
-                      ORDER  BY shown_at DESC LIMIT 1) AS snoozed_until
+                      ORDER  BY shown_at DESC, id DESC LIMIT 1) AS snoozed_until,
+                     MAX(dismissed_at) AS dismissed_at
             FROM     suggestion_history
-            WHERE    suggestion_id IS NOT NULL
             GROUP BY suggestion_id
             """
         ).fetchall()
@@ -93,6 +93,7 @@ def _load_history(conn: sqlite3.Connection) -> dict[str, dict]:
             history[row["suggestion_id"]] = {
                 "shown_at":      row["last_shown_at"],
                 "snoozed_until": row["snoozed_until"],
+                "dismissed_at":  row["dismissed_at"],
             }
     except sqlite3.Error as exc:
         log.warning("Failed to load suggestion history: %s", exc)
@@ -122,6 +123,11 @@ def _is_snoozed(suggestion: dict, history: dict[str, dict]) -> bool:
         return datetime.now(tz=timezone.utc) < until
     except (ValueError, TypeError):
         return False
+
+
+def _is_dismissed(suggestion: dict, history: dict[str, dict]) -> bool:
+    rec = history.get(suggestion["id"])
+    return bool(rec and rec.get("dismissed_at"))
 
 
 # ── Sort key ──────────────────────────────────────────────────────────────────
@@ -179,9 +185,11 @@ def get_eligible_suggestions(
     by_trigger = [s for s in all_suggestions if s.get("trigger") in active_triggers]
     # 2. Cooldown filter
     after_cooldown = [s for s in by_trigger if not _in_cooldown(s, history)]
-    # 3. Snooze filter
-    after_snooze = [s for s in after_cooldown if not _is_snoozed(s, history)]
-    # 4. Sort
+    # 3. Dismiss filter
+    after_dismiss = [s for s in after_cooldown if not _is_dismissed(s, history)]
+    # 4. Snooze filter
+    after_snooze = [s for s in after_dismiss if not _is_snoozed(s, history)]
+    # 5. Sort
     sorted_list = sorted(after_snooze, key=lambda s: _sort_key(s, history))
     # 5. Cap
     selected = sorted_list[:max_visible]
@@ -194,8 +202,8 @@ def get_eligible_suggestions(
         resolved.append(copy)
 
     log.debug(
-        "Suggestions: %d total → %d trigger → %d cooldown → %d snooze → %d selected",
+        "Suggestions: %d total → %d trigger → %d cooldown → %d dismiss → %d snooze → %d selected",
         len(all_suggestions), len(by_trigger), len(after_cooldown),
-        len(after_snooze), len(resolved),
+        len(after_dismiss), len(after_snooze), len(resolved),
     )
     return resolved

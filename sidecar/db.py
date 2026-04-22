@@ -117,7 +117,7 @@ def _reset_if_schema_changed(conn: sqlite3.Connection) -> None:
     dropped so init_db() can recreate them from the current SCHEMA.
 
     This replaces the ALTER TABLE migration approach during development.
-    Before shipping to real users, swap this out for proper migrations.
+    TODO(M6): swap this out for proper ALTER TABLE migrations before shipping to users.
     """
     current = _schema_hash()
     hash_path = _schema_hash_path()
