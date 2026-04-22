@@ -30,7 +30,6 @@
 # actions             Ordered list of actions. First item is the primary action.
 #                       copy_prompt       — copies the resolved prompt to clipboard
 #                       open_cowork       — copies prompt + brings Cowork to front
-#                       open_claude_code  — copies prompt + opens Claude Code
 #
 # CONTRIBUTING
 # ────────────
@@ -69,7 +68,6 @@ suggestions:
     actions:
       - copy_prompt
       - open_cowork
-      - open_claude_code
 
   - id: testing002
     category: testing
@@ -88,26 +86,6 @@ suggestions:
     actions:
       - copy_prompt
       - open_cowork
-      - open_claude_code
-
-  - id: testing003
-    category: testing
-    title: "Find and fix flaky tests"
-    description: >
-      Flaky tests erode trust in the test suite and slow down CI. This prompt
-      identifies tests with non-deterministic behaviour and proposes targeted
-      fixes for each.
-    prompt: >
-      Review the test suite in {{project}} for signs of flakiness: tests that
-      depend on timing, external state, random values, or execution order.
-      Identify the top 3 most likely candidates and propose a specific fix
-      for each.
-    trigger: always
-    show_every_n_days: 14
-    actions:
-      - copy_prompt
-      - open_cowork
-      - open_claude_code
 
 # ───────────────────────────────────────────────────────────────────────────────
 # SECURITY
@@ -133,9 +111,8 @@ suggestions:
     trigger: always
     show_every_n_days: 14
     actions:
-      - copy_prompt
       - open_cowork
-      - open_claude_code
+      - copy_prompt
 
   - id: security002
     category: security
@@ -154,9 +131,8 @@ suggestions:
     trigger: low_utilization_eow
     show_every_n_days: 30
     actions:
-      - copy_prompt
       - open_cowork
-      - open_claude_code
+      - copy_prompt
 
   - id: security003
     category: security
@@ -171,11 +147,10 @@ suggestions:
       every instance with its file and line number. For each, suggest the
       correct approach: environment variable, secrets manager, or removal.
     trigger: always
-    show_every_n_days: 21
+    show_every_n_days: 14
     actions:
-      - copy_prompt
       - open_cowork
-      - open_claude_code
+      - copy_prompt
 
 # ───────────────────────────────────────────────────────────────────────────────
 # DOCUMENTATION
@@ -200,8 +175,6 @@ suggestions:
     show_every_n_days: 14
     actions:
       - copy_prompt
-      - open_cowork
-      - open_claude_code
 
   - id: documentation002
     category: documentation
@@ -219,27 +192,6 @@ suggestions:
     show_every_n_days: 10
     actions:
       - copy_prompt
-      - open_cowork
-      - open_claude_code
-
-  - id: documentation003
-    category: documentation
-    title: "Document API endpoints"
-    description: >
-      Produces clear reference documentation for all public API endpoints:
-      method, path, request parameters, response shape, and example payloads.
-      Useful before sharing an API with other developers or teams.
-    prompt: >
-      Document all API endpoints exposed by {{project}}. For each endpoint
-      include: HTTP method and path, description of purpose, request parameters
-      and body schema, response schema with an example payload, and any
-      authentication requirements. Format as a reference document.
-    trigger: low_utilization_eow
-    show_every_n_days: 21
-    actions:
-      - copy_prompt
-      - open_cowork
-      - open_claude_code
 
 # ───────────────────────────────────────────────────────────────────────────────
 # CODE HEALTH
@@ -266,7 +218,6 @@ suggestions:
     actions:
       - copy_prompt
       - open_cowork
-      - open_claude_code
 
   - id: codehealth002
     category: code_health
@@ -287,7 +238,6 @@ suggestions:
     actions:
       - copy_prompt
       - open_cowork
-      - open_claude_code
 
   - id: codehealth003
     category: code_health
@@ -306,7 +256,6 @@ suggestions:
     actions:
       - copy_prompt
       - open_cowork
-      - open_claude_code
 
 # ───────────────────────────────────────────────────────────────────────────────
 # DEPENDENCIES
@@ -330,9 +279,8 @@ suggestions:
     trigger: always
     show_every_n_days: 14
     actions:
-      - copy_prompt
       - open_cowork
-      - open_claude_code
+      - copy_prompt
 
   - id: dependencies002
     category: dependencies
@@ -349,9 +297,8 @@ suggestions:
     trigger: always
     show_every_n_days: 30
     actions:
-      - copy_prompt
       - open_cowork
-      - open_claude_code
+      - copy_prompt
 
   - id: dependencies003
     category: dependencies
@@ -368,9 +315,8 @@ suggestions:
     trigger: low_utilization_eow
     show_every_n_days: 30
     actions:
-      - copy_prompt
       - open_cowork
-      - open_claude_code
+      - copy_prompt
 
 # ───────────────────────────────────────────────────────────────────────────────
 # PRODUCT
@@ -395,8 +341,8 @@ suggestions:
     trigger: low_utilization_eow
     show_every_n_days: 7
     actions:
-      - copy_prompt
       - open_cowork
+      - copy_prompt
 
   - id: product002
     category: product
@@ -412,24 +358,6 @@ suggestions:
       bug fixes, and breaking changes if any.
     trigger: always
     show_every_n_days: 7
-    actions:
-      - copy_prompt
-      - open_cowork
-
-  - id: product003
-    category: product
-    title: "Write acceptance criteria for a feature"
-    description: >
-      Clear acceptance criteria prevent ambiguity at review time and make it
-      obvious when a feature is actually done. This prompt produces testable,
-      unambiguous criteria for a feature you describe.
-    prompt: >
-      Help me write acceptance criteria for a feature in {{project}}. Ask me
-      to describe the feature first, then produce a set of acceptance criteria
-      that are specific, testable, and cover the happy path, edge cases, and
-      failure states.
-    trigger: always
-    show_every_n_days: 5
     actions:
       - copy_prompt
       - open_cowork
@@ -458,12 +386,12 @@ suggestions:
     trigger: always
     show_every_n_days: 30
     actions:
-      - copy_prompt
       - open_cowork
+      - copy_prompt
 
   - id: maintenance002
     category: maintenance
-    title: "Clean up the Desktop"
+    title: "Clean up your Desktop"
     description: >
       A cluttered Desktop slows down navigation and makes screenshots
       embarrassing. This prompt sorts what is there and suggests a tidy
@@ -474,10 +402,10 @@ suggestions:
       Desktop with a better name. Propose a clean Desktop structure and ask
       before making any changes.
     trigger: always
-    show_every_n_days: 21
+    show_every_n_days: 14
     actions:
-      - copy_prompt
       - open_cowork
+      - copy_prompt
 
   - id: maintenance003
     category: maintenance
@@ -494,8 +422,8 @@ suggestions:
     trigger: always
     show_every_n_days: 30
     actions:
-      - copy_prompt
       - open_cowork
+      - copy_prompt
 
   - id: maintenance004
     category: maintenance
@@ -512,8 +440,8 @@ suggestions:
     trigger: always
     show_every_n_days: 30
     actions:
-      - copy_prompt
       - open_cowork
+      - copy_prompt
 
 # ───────────────────────────────────────────────────────────────────────────────
 # PRODUCTIVITY
@@ -544,33 +472,13 @@ suggestions:
     category: productivity
     title: "Write a weekly retrospective"
     description: >
-      A short written retrospective at the end of a quota cycle helps you see
-      what you accomplished, where Claude was most useful, and what to do
-      differently next week.
+      A short written retrospective at the end of a week helps you see
+      what you accomplished and what to do differently next week.
     prompt: >
       Help me write a brief weekly retrospective. Ask me 3 questions about
-      what I worked on this week in {{project}}, what went well, and what I
+      what I worked on this week in my projects, what went well, and what I
       would do differently. Then produce a short written summary I can save
       or share.
-    trigger: low_utilization_eow
-    show_every_n_days: 7
-    actions:
-      - copy_prompt
-      - open_cowork
-
-  - id: productivity003
-    category: productivity
-    title: "Capture what you learned this week"
-    description: >
-      Knowledge that isn't written down is easily lost. This prompt turns what
-      you worked on into a short written note you can refer back to in weeks
-      or months.
-    prompt: >
-      I have been working on {{project}} this week. Help me capture what I
-      learned. Ask me a few questions about the problems I solved and the
-      decisions I made, then produce a short knowledge note — something I
-      could read in three months and quickly understand what I was doing
-      and why.
     trigger: always
     show_every_n_days: 7
     actions:
