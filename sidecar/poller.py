@@ -124,7 +124,7 @@ def compute_interval(
     thresholds: list[tuple[float, int]] = DEFAULT_THRESHOLDS,
 ) -> int:
     """Return the appropriate poll interval in seconds given current utilisation."""
-    utilisation = max(session_pct, weekly_pct)
+    utilisation = session_pct
     for threshold, interval in thresholds:
         if utilisation >= threshold:
             return interval

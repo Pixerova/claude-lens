@@ -2,7 +2,7 @@
 main.py — FastAPI sidecar entry point for Claude Lens.
 
 Starts on http://localhost:8765
-Exposes all M1 data endpoints consumed by the Tauri frontend.
+Exposes data endpoints consumed by the Tauri frontend.
 
 Startup sequence:
   1. Load config
@@ -24,12 +24,16 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import db
 import pricing
 from keychain import is_authenticated, get_oauth_token
 from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS
 from parser import scan_all_sessions, start_watchers
+from suggestions_loader import load_suggestions
+from trigger_evaluator import evaluate_triggers, build_trigger_context
+from suggestion_engine import get_eligible_suggestions
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -59,8 +63,20 @@ DEFAULT_CONFIG = {
     "warnings": {"amberPct": 80, "redPct": 90},
     "suggestions": {
         "enabled": True,
-        "idleThresholdHours": 4,
+        "maxVisible": 5,
         "workingHours": {"start": "09:00", "end": "18:00"},
+        "triggers": {
+            "low_utilization_eow": {
+                "tiers": [
+                    {"hoursUntilResetBelow": 72, "weeklyPctBelow": 0.70},
+                    {"hoursUntilResetBelow": 48, "weeklyPctBelow": 0.50},
+                ],
+            },
+            "post_reset": {
+                "windowHours": 4,
+                "dropThreshold": 0.30,
+            },
+        },
     },
     "notifications": {
         "limitWarnings": True,
@@ -110,12 +126,41 @@ _poller: Optional[UsagePoller] = None
 _poller_task: Optional[asyncio.Task] = None
 _watcher = None
 
+# Prior-snapshot tracking for post_reset trigger detection.
+# _prev_latest holds (weekly_pct, recorded_at) from the most recent poll so
+# that the NEXT poll can detect a significant drop.
+_prior_weekly_pct: Optional[float] = None
+_prior_recorded_at: Optional[str] = None
+_prev_latest: Optional[tuple[float, str]] = None  # staging buffer
+
+# Suggestions — loaded once at startup, available for all /suggestions requests.
+_all_suggestions: list[dict] = []
+_suggestions_yaml_error: Optional[str] = None  # surfaced in GET /suggestions
+
+
+def _on_poller_update(snapshot) -> None:
+    """Callback fired by UsagePoller after each successful poll.
+
+    Advances the staging buffer so /suggestions can compare the current reading
+    against the previous one for post_reset detection.
+    """
+    global _prior_weekly_pct, _prior_recorded_at, _prev_latest
+    # Both reads (_prior_*) and writes (_prev_latest) happen on the asyncio event
+    # loop — the poller's callback runs inside its async task, and get_suggestions()
+    # runs on the same loop — so no lock is needed. If the poller moves to a thread,
+    # protect these globals with asyncio.Lock.
+    # Move the previously staged reading into "prior" (visible to trigger eval).
+    if _prev_latest is not None:
+        _prior_weekly_pct, _prior_recorded_at = _prev_latest
+    # Stage the just-received reading for the next iteration.
+    _prev_latest = (snapshot.weekly_pct, snapshot.recorded_at)
+
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _config, _poller, _poller_task, _watcher
+    global _config, _poller, _poller_task, _watcher, _all_suggestions, _suggestions_yaml_error
 
     # 1. Config
     _config = load_config()
@@ -143,10 +188,24 @@ async def lifespan(app: FastAPI):
     # 6. File watchers
     _watcher = start_watchers()
 
-    # 7. Usage poller — create_task requires a running event loop;
+    # 7. Load suggestions (non-fatal — logs warnings on bad entries)
+    result = load_suggestions()
+    if result is None:
+        # YAML parse error — keep _all_suggestions as-is (empty at first launch,
+        # or the previously loaded set on a future hot-reload).
+        _suggestions_yaml_error = (
+            "suggestions.yaml could not be parsed. Check the file for syntax errors."
+        )
+        log.error("Suggestions unavailable: %s", _suggestions_yaml_error)
+    else:
+        _all_suggestions = result
+        _suggestions_yaml_error = None
+        log.info("Suggestions engine: %d suggestions loaded", len(_all_suggestions))
+
+    # 8. Usage poller — create_task requires a running event loop;
     #    this is safe here because lifespan runs inside FastAPI's async context.
     thresholds = _build_poll_thresholds(_config)
-    _poller = UsagePoller(thresholds=thresholds)
+    _poller = UsagePoller(thresholds=thresholds, on_update=_on_poller_update)
     _poller_task = asyncio.create_task(_poller.run())
 
     log.info("Claude Lens sidecar started on http://localhost:8765")
@@ -388,6 +447,142 @@ def auth_status():
             else "No Claude OAuth token found. Please ensure Claude Code is installed and you are logged in."
         ),
     }
+
+
+# ── Suggestions ───────────────────────────────────────────────────────────────
+
+@app.get("/suggestions")
+def get_suggestions():
+    """
+    Return the current eligible suggestion set with resolved prompts and trigger context.
+
+    Response shape:
+    {
+      "suggestions": [
+        {
+          "id": "testing001",
+          "category": "testing",
+          "title": "...",
+          "description": "...",
+          "prompt": "...",          # {{project}} already resolved
+          "trigger": "low_utilization_eow",
+          "actions": ["copy_prompt", "open_cowork"]
+        }
+      ],
+      "trigger_context": {
+        "always": true,
+        "low_utilization_eow": true,
+        "post_reset": false,
+        "weekly_pct": 0.28,
+        "hours_until_reset": 31.0
+      }
+    }
+    """
+    if not _config.get("suggestions", {}).get("enabled", True):
+        return {"suggestions": [], "trigger_context": {}}
+
+    # Get current usage values (fall back gracefully if poller not ready).
+    if _poller and _poller.current:
+        weekly_pct = _poller.current.weekly_pct
+        weekly_resets = _poller.current.weekly_resets_at
+    else:
+        row = db.get_latest_snapshot()
+        weekly_pct = row["weekly_pct"] if row else 0.0
+        weekly_resets = row["weekly_resets"] if row else None
+
+    active_triggers = evaluate_triggers(
+        weekly_pct=weekly_pct,
+        weekly_resets=weekly_resets,
+        prior_weekly_pct=_prior_weekly_pct,
+        prior_recorded_at=_prior_recorded_at,
+        config=_config,
+    )
+    trigger_context = build_trigger_context(weekly_pct, weekly_resets, active_triggers)
+
+    with db._get_conn() as conn:
+        eligible = get_eligible_suggestions(
+            all_suggestions=_all_suggestions,
+            active_triggers=active_triggers,
+            conn=conn,
+            config=_config,
+        )
+
+    return {
+        "suggestions": [
+            {
+                "id":          s["id"],
+                "category":    s.get("category", ""),
+                "title":       s.get("title", ""),
+                "description": s.get("description", ""),
+                "prompt":      s.get("prompt", ""),
+                "trigger":     s.get("trigger", ""),
+                "actions":     s.get("actions", []),
+            }
+            for s in eligible
+        ],
+        "trigger_context": trigger_context,
+        "yaml_error": _suggestions_yaml_error,
+    }
+
+
+def _require_known_suggestion(suggestion_id: str) -> None:
+    known = {s["id"] for s in _all_suggestions}
+    if suggestion_id not in known:
+        raise HTTPException(status_code=404, detail=f"Unknown suggestion_id: {suggestion_id!r}")
+
+
+class SuggestionShownBody(BaseModel):
+    trigger: str = "rule_engine"
+
+
+@app.post("/suggestions/{suggestion_id}/shown")
+def suggestion_shown(suggestion_id: str, body: SuggestionShownBody = SuggestionShownBody()):
+    """Record that a suggestion card was shown to the user.
+
+    The shown_at timestamp written here is used by the cooldown filter to
+    prevent the same suggestion from appearing too frequently.
+    """
+    _require_known_suggestion(suggestion_id)
+    db.record_suggestion_shown(suggestion_id, trigger_rule=body.trigger)
+    return {"status": "ok", "suggestion_id": suggestion_id}
+
+
+@app.post("/suggestions/{suggestion_id}/acted_on")
+def suggestion_acted_on(suggestion_id: str):
+    """Record that the user acted on a suggestion (copied prompt, opened app, etc.)."""
+    _require_known_suggestion(suggestion_id)
+    db.record_suggestion_acted_on(suggestion_id)
+    return {"status": "ok", "suggestion_id": suggestion_id}
+
+
+@app.post("/suggestions/{suggestion_id}/dismissed")
+def suggestion_dismissed(suggestion_id: str):
+    """Record that the user dismissed a suggestion card."""
+    _require_known_suggestion(suggestion_id)
+    db.record_suggestion_dismissed(suggestion_id)
+    return {"status": "ok", "suggestion_id": suggestion_id}
+
+
+class SnoozeRequest(BaseModel):
+    until: str  # ISO 8601 UTC, e.g. "2026-04-22T09:00:00Z"
+
+
+@app.post("/suggestions/{suggestion_id}/snoozed")
+def suggestion_snoozed(suggestion_id: str, body: SnoozeRequest):
+    """Snooze a suggestion until a given UTC datetime.
+
+    Body: { "until": "<ISO 8601 UTC>" }
+    """
+    _require_known_suggestion(suggestion_id)
+    try:
+        datetime.fromisoformat(body.until.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"'until' must be a valid ISO 8601 UTC timestamp; got {body.until!r}",
+        )
+    db.record_suggestion_snoozed(suggestion_id, body.until)
+    return {"status": "ok", "suggestion_id": suggestion_id, "snoozed_until": body.until}
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

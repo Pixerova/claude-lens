@@ -190,27 +190,24 @@ class TestSessionSummaries:
 # ── Suggestion history ────────────────────────────────────────────────────────
 
 class TestSuggestionHistory:
-    def test_store_suggestion_returns_id(self, isolated_db):
-        sid = db.store_suggestion("low_usage", "Work on your API docs")
-        assert isinstance(sid, int)
-        assert sid > 0
-
     def test_dismiss_suggestion(self, isolated_db):
-        sid = db.store_suggestion("idle_window", "Try a refactor")
-        db.dismiss_suggestion(sid)
+        db.record_suggestion_shown("idle_window")
+        db.record_suggestion_dismissed("idle_window")
         conn = sqlite3.connect(isolated_db)
         row = conn.execute(
-            "SELECT dismissed_at FROM suggestion_history WHERE id = ?", (sid,)
+            "SELECT dismissed_at FROM suggestion_history WHERE suggestion_id = ?",
+            ("idle_window",),
         ).fetchone()
         conn.close()
         assert row[0] is not None
 
     def test_mark_suggestion_acted(self, isolated_db):
-        sid = db.store_suggestion("end_of_week", "Write tests for auth module")
-        db.mark_suggestion_acted(sid)
+        db.record_suggestion_shown("end_of_week")
+        db.record_suggestion_acted_on("end_of_week")
         conn = sqlite3.connect(isolated_db)
         row = conn.execute(
-            "SELECT acted_on FROM suggestion_history WHERE id = ?", (sid,)
+            "SELECT acted_on FROM suggestion_history WHERE suggestion_id = ?",
+            ("end_of_week",),
         ).fetchone()
         conn.close()
         assert row[0] == 1
@@ -251,7 +248,7 @@ class TestRetentionPruning:
 
     def test_prune_keeps_suggestions_for_90_days(self, isolated_db):
         """Suggestions use a fixed 90-day retention regardless of the main setting."""
-        db.store_suggestion("test_rule", "A suggestion")
+        db.record_suggestion_shown("test_rule")
         # Backdate to 45 days ago — should NOT be pruned (90-day window)
         old_ts = (datetime.now(timezone.utc) - timedelta(days=45)).isoformat()
         self._backdate(isolated_db, "suggestion_history", "shown_at", old_ts)
@@ -273,7 +270,7 @@ class TestDbStats:
         db.store_snapshot(**make_snapshot())
         db.upsert_session_summary(**make_session(session_id="s1"))
         db.upsert_session_summary(**make_session(session_id="s2"))
-        db.store_suggestion("rule", "suggestion text")
+        db.record_suggestion_shown("rule")
 
         stats = db.get_db_stats()
         assert stats["snapshot_count"] == 1

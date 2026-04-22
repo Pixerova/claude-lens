@@ -25,11 +25,11 @@ from poller import (
 # ── compute_interval ──────────────────────────────────────────────────────────
 
 class TestComputeInterval:
-    """The interval is driven by max(session_pct, weekly_pct)."""
+    """The interval is driven by session_pct only."""
 
     @pytest.mark.parametrize("session,weekly,expected", [
         (0.95, 0.10, 30),    # session critical → 30s
-        (0.10, 0.92, 30),    # weekly critical  → 30s
+        (0.10, 0.92, 1800),  # weekly high but session low → session wins
         (0.85, 0.10, 60),    # high             → 60s
         (0.65, 0.10, 120),   # elevated         → 120s
         (0.30, 0.25, 300),   # normal           → 300s
@@ -40,9 +40,9 @@ class TestComputeInterval:
     def test_correct_interval_for_utilisation(self, session, weekly, expected):
         assert compute_interval(session, weekly) == expected
 
-    def test_uses_higher_of_session_and_weekly(self):
-        # Weekly is higher — should drive the interval
-        assert compute_interval(0.05, 0.91) == 30
+    def test_weekly_does_not_drive_interval(self):
+        # High weekly, low session — interval should reflect session only
+        assert compute_interval(0.05, 0.91) == 1800
         assert compute_interval(0.91, 0.05) == 30
 
     def test_custom_thresholds_are_respected(self):

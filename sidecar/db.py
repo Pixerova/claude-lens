@@ -8,7 +8,9 @@ Tables:
   - suggestion_history    : log of suggestions shown to the user
 """
 
+import hashlib
 import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -25,6 +27,20 @@ DB_PATH  = DATA_DIR / "claudelens.db"
 
 def _ensure_data_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _schema_hash_path() -> Path:
+    """Return the path to the persisted schema hash file.
+
+    Defined as a function (not a module-level constant) so that tests can
+    monkeypatch DATA_DIR and have this path follow automatically.
+    """
+    return DATA_DIR / "schema.hash"
+
+
+def _schema_hash() -> str:
+    """SHA-256 of the SCHEMA constant, truncated to 16 hex chars."""
+    return hashlib.sha256(SCHEMA.encode()).hexdigest()[:16]
 
 
 def get_connection() -> sqlite3.Connection:
@@ -79,49 +95,76 @@ CREATE TABLE IF NOT EXISTS suggestion_history (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     shown_at         TEXT NOT NULL,
     trigger_rule     TEXT NOT NULL,
-    suggestion_text  TEXT NOT NULL,
+    suggestion_id    TEXT NOT NULL,
     dismissed_at     TEXT,
-    acted_on         INTEGER DEFAULT 0
+    acted_on         INTEGER DEFAULT 0,
+    snoozed_until    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_time   ON plan_usage_snapshots(recorded_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_start   ON session_summaries(started_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_source  ON session_summaries(source);
+CREATE INDEX IF NOT EXISTS idx_suggestion_history_sid
+    ON suggestion_history(suggestion_id, shown_at DESC);
 """
 
 
-def _migrate(conn: sqlite3.Connection) -> None:
-    """Add new columns to existing tables without touching existing data."""
-    existing = {row[1] for row in conn.execute("PRAGMA table_info(session_summaries)")}
-    additions = [
-        ("title",              "TEXT"),
-        ("input_tokens",       "INTEGER NOT NULL DEFAULT 0"),
-        ("output_tokens",      "INTEGER NOT NULL DEFAULT 0"),
-        ("cache_read_tokens",  "INTEGER NOT NULL DEFAULT 0"),
-        ("cache_write_tokens", "INTEGER NOT NULL DEFAULT 0"),
+def _reset_if_schema_changed(conn: sqlite3.Connection) -> None:
+    """Drop all tables and recreate if the schema has changed since last run.
+
+    Compares a hash of the SCHEMA constant against the value persisted in
+    ~/.claudelens/schema.hash.  On mismatch (or first run), all tables are
+    dropped so init_db() can recreate them from the current SCHEMA.
+
+    This replaces the ALTER TABLE migration approach during development.
+    TODO(M6): swap this out for proper ALTER TABLE migrations before shipping to users.
+    """
+    current = _schema_hash()
+    hash_path = _schema_hash_path()
+    stored = hash_path.read_text().strip() if hash_path.exists() else None
+
+    if stored == current:
+        return  # schema unchanged — nothing to do
+
+    if stored is not None:
+        log.info(
+            "Schema changed (stored=%s, current=%s) — dropping all tables",
+            stored, current,
+        )
+    else:
+        log.info("No schema hash found — initialising fresh database")
+
+    # Drop all user tables (excludes SQLite internal tables).
+    tables = [
+        row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
     ]
-    _ALLOWED_MIGRATION_COLS = {
-        "title", "input_tokens", "output_tokens",
-        "cache_read_tokens", "cache_write_tokens",
-    }
-    _ALLOWED_TYPEDEFS = {
-        "TEXT",
-        "INTEGER NOT NULL DEFAULT 0",
-    }
-    for col, typedef in additions:
-        if col not in existing:
-            assert col in _ALLOWED_MIGRATION_COLS, f"Unexpected column in migration: {col!r}"
-            assert typedef in _ALLOWED_TYPEDEFS, f"Unexpected typedef in migration: {typedef!r}"
-            conn.execute(f"ALTER TABLE session_summaries ADD COLUMN {col} {typedef}")
-            log.info("Migration: added column %s to session_summaries", col)
+    for table in tables:
+        conn.execute(f"DROP TABLE IF EXISTS [{table}]")
     conn.commit()
+
+    # Persist the new hash so the next startup is a no-op.
+    # Atomic write: write to a temp file then rename, so a crash between the
+    # DROP TABLE commit and this write can never leave a partially-written hash.
+    _ensure_data_dir()
+    tmp = hash_path.with_suffix(".tmp")
+    tmp.write_text(current + "\n")
+    os.replace(tmp, hash_path)
+    log.info("Schema hash updated to %s", current)
 
 
 def init_db() -> None:
-    """Create tables and indexes if they don't exist. Safe to call on every startup."""
+    """Initialise the database.
+
+    On schema change: drops all tables and recreates from SCHEMA.
+    On unchanged schema: a no-op (tables already exist).
+    Safe to call on every startup.
+    """
     with _get_conn() as conn:
+        _reset_if_schema_changed(conn)
         conn.executescript(SCHEMA)
-        _migrate(conn)
 
 
 # ── Writers ──────────────────────────────────────────────────────────────────
@@ -195,39 +238,92 @@ def upsert_session_summary(
             )
 
 
-def store_suggestion(trigger_rule: str, suggestion_text: str) -> int:
-    """Log a suggestion shown to the user. Returns the new row id."""
-    now = datetime.now(timezone.utc).isoformat()
-    with _get_conn() as conn:
-        with conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO suggestion_history (shown_at, trigger_rule, suggestion_text)
-                VALUES (?, ?, ?)
-                """,
-                (now, trigger_rule, suggestion_text),
-            )
-            row_id = cursor.lastrowid
-    return row_id
+# ── Suggestion writers (keyed by suggestion_id text, not row id) ─────────────
 
+def record_suggestion_shown(suggestion_id: str, trigger_rule: str = "rule_engine") -> None:
+    """Insert a new shown_at row for the given suggestion_id.
 
-def dismiss_suggestion(suggestion_id: int) -> None:
+    A new row is always inserted (not upserted) so every display event is logged.
+    The cooldown filter uses MAX(shown_at) grouped by suggestion_id.
+    """
     now = datetime.now(timezone.utc).isoformat()
     with _get_conn() as conn:
         with conn:
             conn.execute(
-                "UPDATE suggestion_history SET dismissed_at = ? WHERE id = ?",
+                """
+                INSERT INTO suggestion_history
+                    (shown_at, trigger_rule, suggestion_id, acted_on)
+                VALUES (?, ?, ?, 0)
+                """,
+                (now, trigger_rule, suggestion_id),
+            )
+
+
+def record_suggestion_acted_on(suggestion_id: str) -> None:
+    """Mark the most recent shown row for this suggestion_id as acted_on."""
+    with _get_conn() as conn:
+        with conn:
+            conn.execute(
+                """
+                UPDATE suggestion_history
+                SET    acted_on = 1
+                WHERE  id = (
+                    SELECT id FROM suggestion_history
+                    WHERE  suggestion_id = ?
+                    ORDER  BY shown_at DESC LIMIT 1
+                )
+                """,
+                (suggestion_id,),
+            )
+
+
+def record_suggestion_dismissed(suggestion_id: str) -> None:
+    """Record dismissed_at on the most recent shown row for this suggestion_id."""
+    now = datetime.now(timezone.utc).isoformat()
+    with _get_conn() as conn:
+        with conn:
+            conn.execute(
+                """
+                UPDATE suggestion_history
+                SET    dismissed_at = ?
+                WHERE  id = (
+                    SELECT id FROM suggestion_history
+                    WHERE  suggestion_id = ?
+                    ORDER  BY shown_at DESC LIMIT 1
+                )
+                """,
                 (now, suggestion_id),
             )
 
 
-def mark_suggestion_acted(suggestion_id: int) -> None:
+def record_suggestion_snoozed(suggestion_id: str, snoozed_until: str) -> None:
+    """Write snoozed_until on the most recent shown row for this suggestion_id.
+
+    If no row exists yet, inserts a new one so the snooze is persisted.
+    """
+    now = datetime.now(timezone.utc).isoformat()
     with _get_conn() as conn:
         with conn:
-            conn.execute(
-                "UPDATE suggestion_history SET acted_on = 1 WHERE id = ?",
+            existing = conn.execute(
+                "SELECT id FROM suggestion_history WHERE suggestion_id = ? "
+                "ORDER BY shown_at DESC LIMIT 1",
                 (suggestion_id,),
-            )
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE suggestion_history SET snoozed_until = ? WHERE id = ?",
+                    (snoozed_until, existing["id"]),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO suggestion_history
+                        (shown_at, trigger_rule, suggestion_id,
+                         acted_on, snoozed_until)
+                    VALUES (?, 'rule_engine', ?, 0, ?)
+                    """,
+                    (now, suggestion_id, snoozed_until),
+                )
 
 
 # ── Readers ──────────────────────────────────────────────────────────────────

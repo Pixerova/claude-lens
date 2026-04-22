@@ -1,5 +1,5 @@
 """
-conftest.py — Shared pytest fixtures for Claude Lens M1 test suite.
+conftest.py — Shared pytest fixtures for Claude Lens test suite.
 
 Key fixture: `isolated_db` patches db.DB_PATH and db.DATA_DIR to a
 temporary directory so every test gets a clean, empty database without

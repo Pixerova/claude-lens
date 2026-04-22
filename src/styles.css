@@ -17,6 +17,16 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Suggestion tile animations */
+@keyframes num-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.07); }
+}
+@keyframes text-glow {
+  0%, 100% { opacity: 0.8; }
+  50%       { opacity: 1; text-shadow: 0 0 8px rgba(245, 194, 0, 0.6); }
+}
+
 /* Custom scrollbar for session list */
 ::-webkit-scrollbar {
   width: 4px;
