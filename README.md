@@ -35,7 +35,7 @@ Most Claude usage monitors answer: *"How much have I spent?"* claude-lens answer
 
 claude-lens reads your live plan limits from the Anthropic OAuth API (via the token already stored in your macOS Keychain by Claude Code â€” no setup required). It parses local session files from Claude Code and Cowork to attribute that usage between sources. Everything stays on your machine.
 
-The poll interval adapts dynamically: checking every couple minutes when you're near a limit, backing off to once an hour when usage is low.
+The poll interval adapts dynamically: checking every couple minutes when you're near a limit, backing off to once an hour when usage is low. Outside of configured working hours the app enters a low-power sleep mode and polls every 30 minutes instead. If new Claude session activity is detected after end-of-day, the active window is automatically extended by one hour from the last event â€” so late working sessions stay live without any manual action.
 
 ## Configuration
 
@@ -45,6 +45,10 @@ claude-lens reads `~/.claudelens/config.json` on startup. The file is optional â
 {
   "hotkey": "Option+Space",
   "retentionDays": 30,
+  "workingHours": {
+    "start": "09:00",
+    "end": "17:00"
+  },
   "poll": {
     "thresholds": {
       "critical": { "above": 0.90, "intervalSec": 60 },
@@ -62,6 +66,7 @@ claude-lens reads `~/.claudelens/config.json` on startup. The file is optional â
 |---|---|
 | `hotkey` | Global shortcut to show/hide the widget |
 | `retentionDays` | Days of session history to keep |
+| `workingHours.start` / `workingHours.end` | Local 24-hour times defining your working day (e.g. `"09:00"` / `"17:00"`). Outside this window the poller drops to once every 30 minutes. If session file activity is detected after end-of-day, the window is automatically extended by one hour from the last event. Omit the key entirely to disable sleep mode and always poll at the normal rate. |
 | `poll.thresholds` | Adaptive API poll intervals â€” each tier fires when utilization is above the given fraction; the highest matching tier wins |
 | `warnings.amberPct` / `warnings.redPct` | Utilization % at which the widget transitions to amber / red |
 

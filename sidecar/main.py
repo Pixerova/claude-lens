@@ -30,7 +30,8 @@ import db
 import pricing
 from keychain import is_authenticated, get_oauth_token
 from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS
-from parser import scan_all_sessions, start_watchers
+from parser import scan_all_sessions, start_watchers, CLAUDE_CODE_DIR, COWORK_DIR
+from activity_monitor import ActivityMonitor
 from suggestions_loader import load_suggestions
 from trigger_evaluator import evaluate_triggers, build_trigger_context
 from suggestion_engine import get_eligible_suggestions
@@ -50,6 +51,7 @@ CONFIG_PATH = Path.home() / ".claudelens" / "config.json"
 DEFAULT_CONFIG = {
     "hotkey": "Option+Space",
     "retentionDays": 30,
+    "workingHours": {"start": "09:00", "end": "17:00"},
     "poll": {
         "thresholds": {
             "critical": {"above": 0.90, "intervalSec": 60},
@@ -64,7 +66,6 @@ DEFAULT_CONFIG = {
     "suggestions": {
         "enabled": True,
         "maxVisible": 5,
-        "workingHours": {"start": "09:00", "end": "18:00"},
         "triggers": {
             "low_utilization_eow": {
                 "tiers": [
@@ -205,8 +206,20 @@ async def lifespan(app: FastAPI):
     # 8. Usage poller — create_task requires a running event loop;
     #    this is safe here because lifespan runs inside FastAPI's async context.
     thresholds = _build_poll_thresholds(_config)
-    _poller = UsagePoller(thresholds=thresholds, on_update=_on_poller_update)
+    _poller = UsagePoller(
+        thresholds=thresholds,
+        working_hours=_config.get("workingHours"),
+        on_update=_on_poller_update,
+    )
     _poller_task = asyncio.create_task(_poller.run())
+
+    # 9. Activity monitor — same observer as the session file watcher, so no
+    #    extra threads. Signals the poller to extend its active window when
+    #    Claude session activity is detected outside working hours.
+    _activity_monitor = ActivityMonitor(_poller)
+    for _dir in [CLAUDE_CODE_DIR, COWORK_DIR]:
+        if _dir.exists():
+            _watcher.schedule(_activity_monitor, str(_dir), recursive=True)
 
     log.info("Claude Lens sidecar started on http://localhost:8765")
     yield
@@ -279,6 +292,8 @@ def health():
     """Sidecar status, last poll time, DB stats, authentication state."""
     snap = _poller.current if _poller else None
     stats = db.get_db_stats()
+    sleeping = _poller.is_sleeping if _poller else False
+    active_until = _poller.active_until if _poller else None
     return {
         "status":           "ok",
         "authenticated":    is_authenticated(),
@@ -287,6 +302,8 @@ def health():
         "pollIntervalSec":  _poller.interval_sec if _poller else None,
         "isStale":          snap.is_stale if snap else True,
         "stalenessSeconds": _staleness_seconds(snap.recorded_at) if snap else None,
+        "isSleeping":       sleeping,
+        "activeUntil":      active_until.isoformat() if active_until else None,
         "db": stats,
     }
 
