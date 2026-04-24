@@ -181,10 +181,13 @@ export default function App() {
     if (!expanded) setShowTray(false);
   }, [expanded]);
 
+  // Keep in sync with AuthErrorBanner padding (mt-2 mb-1 py-[7px] + content line-height).
+  const AUTH_BANNER_HEIGHT_PX = 40;
+
   // Resize window to fit content
   useEffect(() => {
     const win = getCurrentWindow();
-    const authBannerHeight = authError ? 40 : 0;
+    const authBannerHeight = authError ? AUTH_BANNER_HEIGHT_PX : 0;
     let height: number;
     if (usageError) {
       height = 210; // header (~38) + ErrorPanel (~172)

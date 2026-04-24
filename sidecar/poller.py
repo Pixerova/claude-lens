@@ -276,6 +276,8 @@ class UsagePoller:
                 self._auth_error = True
                 if self._current:
                     self._current.is_stale = True
+                # Auth errors are persistent, not transient — don't increment
+                # consecutive_failures so backoff stays at its current level.
                 log.warning("Auth error (401) — retrying in %ds", BACKOFF_MAX_SEC)
                 await asyncio.sleep(BACKOFF_MAX_SEC)
                 continue
@@ -336,6 +338,10 @@ class UsagePoller:
         except AuthError:
             self._auth_error = True
             return None
+        # Do not clear _auth_error on a transient None return — main.py checks
+        # _poller.auth_error after a None result to decide 401 vs 502. Leaving
+        # _auth_error untouched keeps the auth banner visible through a network
+        # hiccup and prevents the wrong error panel from appearing.
         if snapshot:
             self._auth_error = False
             self._current = snapshot
