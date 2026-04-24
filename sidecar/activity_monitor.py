@@ -24,6 +24,7 @@ class ActivityMonitor(FileSystemEventHandler):
     """
 
     def __init__(self, poller):
+        super().__init__()
         self._poller = poller
 
     def on_created(self, event):

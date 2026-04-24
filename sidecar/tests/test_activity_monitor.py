@@ -69,7 +69,7 @@ class TestActivityMonitor:
         monitor.on_modified(_make_event("/home/user/.claude/projects/foo/audit.jsonl"))
         poller.extend_active_window.assert_not_called()
 
-    def test_extends_only_once_per_event_when_sleeping(self):
+    def test_extends_for_each_independent_sleeping_event(self):
         poller = _make_poller(is_sleeping=True)
         monitor = ActivityMonitor(poller)
         monitor.on_modified(_make_event("/a/b/session1.jsonl"))

@@ -30,8 +30,6 @@ from typing import Optional, Callable
 
 import httpx
 
-import httpx
-
 from keychain import get_oauth_token
 from db import store_snapshot
 
@@ -344,7 +342,9 @@ class UsagePoller:
         """True when outside working hours with no active extension in effect."""
         if self._wh_start is None or self._wh_end is None:
             return False
-        return not _is_in_working_hours(self._wh_start, self._wh_end, self._active_until)
+        with self._wh_lock:
+            active_until = self._active_until
+        return not _is_in_working_hours(self._wh_start, self._wh_end, active_until)
 
     @property
     def active_until(self) -> Optional[datetime]:
@@ -481,6 +481,8 @@ class UsagePoller:
                 weekly_resets=snapshot.weekly_resets_at,
             )
             self._interval_sec = _effective_interval(snapshot, self._thresholds)
+            if self.is_sleeping:
+                self._interval_sec = SLEEP_INTERVAL_SEC
             save_state(snapshot, self._interval_sec)
             if self._on_update:
                 result = self._on_update(snapshot)

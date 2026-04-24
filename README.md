@@ -66,7 +66,7 @@ claude-lens reads `~/.claudelens/config.json` on startup. The file is optional â
 |---|---|
 | `hotkey` | Global shortcut to show/hide the widget |
 | `retentionDays` | Days of session history to keep |
-| `workingHours.start` / `workingHours.end` | Local 24-hour times defining your working day (e.g. `"09:00"` / `"17:00"`). Outside this window the poller drops to once every 30 minutes. If session file activity is detected after end-of-day, the window is automatically extended by one hour from the last event. Omit the key entirely to disable sleep mode and always poll at the normal rate. |
+| `workingHours.start` / `workingHours.end` | Local 24-hour times defining your working day (e.g. `"09:00"` / `"17:00"`). Outside this window the poller drops to once every 30 minutes. If session file activity is detected after end-of-day, the window is automatically extended by one hour from the last event. Sleep mode is always active; change the times to adjust your window. |
 | `poll.thresholds` | Adaptive API poll intervals â€” each tier fires when utilization is above the given fraction; the highest matching tier wins |
 | `warnings.amberPct` / `warnings.redPct` | Utilization % at which the widget transitions to amber / red |
 
