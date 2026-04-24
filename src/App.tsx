@@ -106,6 +106,24 @@ const SourceRow: React.FC<SourceRowProps> = ({
   </div>
 );
 
+// ── Auth error banner ─────────────────────────────────────────────────────────
+
+const AuthErrorBanner: React.FC<{ onRefresh: () => void; loading: boolean }> = ({ onRefresh, loading }) => (
+  <div className="flex items-center gap-[7px] mx-[10px] mt-2 mb-1 px-[9px] py-[7px] rounded-[6px] bg-[rgba(255,107,107,0.08)] border border-[rgba(255,107,107,0.25)]">
+    <span className="w-[6px] h-[6px] rounded-full bg-danger shrink-0" />
+    <span className="font-mono text-[9px] font-semibold text-danger leading-snug flex-1">
+      Session expired · run <code className="bg-white/10 px-[3px] rounded">claude</code> in a terminal, then
+    </span>
+    <button
+      onClick={onRefresh}
+      disabled={loading}
+      className="font-mono text-[8px] font-bold text-danger bg-danger/10 border border-danger/25 rounded px-2 py-[3px] cursor-pointer hover:bg-danger/15 transition-colors disabled:opacity-40 shrink-0"
+    >
+      refresh
+    </button>
+  </div>
+);
+
 // ── Error panel ───────────────────────────────────────────────────────────────
 
 const ErrorPanel: React.FC<{ onRetry: () => void; loading: boolean }> = ({ onRetry, loading }) => (
@@ -141,6 +159,7 @@ export default function App() {
     level,
     isLoading: usageLoading,
     error: usageError,
+    authError,
     refresh: refreshUsage,
   } = useUsage();
 
@@ -162,21 +181,25 @@ export default function App() {
     if (!expanded) setShowTray(false);
   }, [expanded]);
 
+  // Keep in sync with AuthErrorBanner padding (mt-2 mb-1 py-[7px] + content line-height).
+  const AUTH_BANNER_HEIGHT_PX = 40;
+
   // Resize window to fit content
   useEffect(() => {
     const win = getCurrentWindow();
+    const authBannerHeight = authError ? AUTH_BANNER_HEIGHT_PX : 0;
     let height: number;
     if (usageError) {
       height = 210; // header (~38) + ErrorPanel (~172)
     } else if (expanded) {
-      height = 660;
+      height = 660 + authBannerHeight;
     } else if (usage?.isStale) {
-      height = 296;
+      height = 296 + authBannerHeight;
     } else {
-      height = 264;
+      height = 264 + authBannerHeight;
     }
     win.setSize(new LogicalSize(340, height)).catch(() => {});
-  }, [expanded, usage?.isStale, usageError]);
+  }, [expanded, usage?.isStale, usageError, authError]);
 
   // Drag from header
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -244,6 +267,11 @@ export default function App() {
             {expanded ? <IconChevronUp /> : <IconChevronDown />}
           </HeaderButton>
         </div>
+
+        {/* ── Auth error banner ─────────────────────────────────────────────── */}
+        {!usageError && authError && (
+          <AuthErrorBanner onRefresh={handleRefresh} loading={usageLoading} />
+        )}
 
         {/* ── Error state (replaces all content) ───────────────────────────── */}
         {usageError && (

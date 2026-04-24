@@ -20,6 +20,7 @@ export interface UseUsageResult {
   level: UsageLevel;
   isLoading: boolean;
   error: string | null;
+  authError: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -51,6 +52,7 @@ export function useUsage(): UseUsageResult {
   const [usage, setUsage]       = useState<UsageCurrent | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [error, setError]       = useState<string | null>(null);
+  const [authError, setAuthError] = useState(false);
   const timerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Server-reported poll interval (ms); null until first successful fetch.
   const serverIntervalMsRef     = useRef<number | null>(null);
@@ -69,11 +71,19 @@ export function useUsage(): UseUsageResult {
         if (health.pollIntervalSec != null) {
           serverIntervalMsRef.current = health.pollIntervalSec * 1000;
         }
+        setAuthError(health.authError ?? false);
       } catch {
-        // Health check failure is non-fatal; fall back to local table.
+        // Health check failure is non-fatal; keep the current authError value
+        // rather than clearing it, to avoid hiding a real auth problem.
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch usage");
+      // A 401 from /usage/refresh means auth failure, not a sidecar outage.
+      // Show the auth banner rather than the generic error panel.
+      if (err instanceof Error && err.message.includes("Sidecar 401")) {
+        setAuthError(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to fetch usage");
+      }
     } finally {
       setLoading(false);
     }
@@ -100,7 +110,7 @@ export function useUsage(): UseUsageResult {
     await fetchUsage(true);
   }, [fetchUsage]);
 
-  return { usage, level: getLevel(usage), isLoading, error, refresh };
+  return { usage, level: getLevel(usage), isLoading, error, authError, refresh };
 }
 
 // ── Formatting helpers (exported for use in components) ───────────────────────

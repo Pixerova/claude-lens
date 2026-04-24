@@ -12,9 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import poller
+from conftest import make_usage_snapshot
 from poller import (
     UsageSnapshot,
     RateLimitedError,
+    AuthError,
     compute_interval,
     load_state,
     save_state,
@@ -60,16 +62,6 @@ class TestComputeInterval:
 # ── State file (load_state / save_state) ─────────────────────────────────────
 
 class TestStateFile:
-    def _make_snapshot(self, session_pct=0.21, weekly_pct=0.25) -> UsageSnapshot:
-        now = datetime.now(timezone.utc).isoformat()
-        return UsageSnapshot(
-            session_pct=session_pct,
-            session_resets_at=(datetime.now(timezone.utc) + timedelta(hours=4)).isoformat(),
-            weekly_pct=weekly_pct,
-            weekly_resets_at=(datetime.now(timezone.utc) + timedelta(days=3)).isoformat(),
-            recorded_at=now,
-            is_stale=False,
-        )
 
     def test_load_state_returns_none_when_no_file(self, isolated_state):
         snapshot, interval = load_state()
@@ -77,7 +69,7 @@ class TestStateFile:
         assert interval == 0
 
     def test_save_and_load_round_trips(self, isolated_state):
-        snap = self._make_snapshot(session_pct=0.42, weekly_pct=0.77)
+        snap = make_usage_snapshot(session_pct=0.42, weekly_pct=0.77)
         save_state(snap, interval_sec=120)
         loaded, interval = load_state()
 
@@ -88,13 +80,13 @@ class TestStateFile:
         assert interval == 120
 
     def test_save_writes_interval(self, isolated_state):
-        snap = self._make_snapshot()
+        snap = make_usage_snapshot()
         save_state(snap, interval_sec=300)
         data = json.loads(isolated_state.read_text())
         assert data["currentIntervalSec"] == 300
 
     def test_save_writes_last_poll_at(self, isolated_state):
-        snap = self._make_snapshot()
+        snap = make_usage_snapshot()
         save_state(snap, interval_sec=60)
         data = json.loads(isolated_state.read_text())
         assert "lastPollAt" in data
@@ -115,7 +107,7 @@ class TestStateFile:
     def test_save_creates_parent_directory(self, tmp_path, monkeypatch):
         nested = tmp_path / "deep" / "dir" / "state.json"
         monkeypatch.setattr(poller, "STATE_PATH", nested)
-        snap = self._make_snapshot()
+        snap = make_usage_snapshot()
         save_state(snap, interval_sec=300)
         assert nested.exists()
 
@@ -144,22 +136,13 @@ class TestUsageSnapshot:
 # ── UsagePoller (unit-level, mocked I/O) ─────────────────────────────────────
 
 class TestUsagePoller:
-    def _make_snapshot(self) -> UsageSnapshot:
-        now = datetime.now(timezone.utc).isoformat()
-        return UsageSnapshot(
-            session_pct=0.30,
-            session_resets_at=(datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(),
-            weekly_pct=0.40,
-            weekly_resets_at=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
-            recorded_at=now,
-        )
 
     def test_initial_current_is_none_when_no_state(self, isolated_state, isolated_db):
         p = poller.UsagePoller()
         assert p.current is None
 
     def test_initial_current_loaded_from_state(self, isolated_state, isolated_db):
-        snap = self._make_snapshot()
+        snap = make_usage_snapshot()
         save_state(snap, interval_sec=300)
         p = poller.UsagePoller()
         assert p.current is not None
@@ -167,7 +150,7 @@ class TestUsagePoller:
 
     @pytest.mark.asyncio
     async def test_force_refresh_returns_snapshot(self, isolated_state, isolated_db):
-        snap = self._make_snapshot()
+        snap = make_usage_snapshot()
         with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
              patch("poller.fetch_usage", new_callable=AsyncMock, return_value=snap), \
              patch("poller.store_snapshot"), \
@@ -196,7 +179,7 @@ class TestUsagePoller:
         """Verify the callback mechanism wires up correctly (sync check)."""
         received = []
         p = poller.UsagePoller(on_update=lambda s: received.append(s))
-        snap = self._make_snapshot()
+        snap = make_usage_snapshot()
         # Simulate what the run loop does after a successful fetch
         p._current = snap
         if p._on_update:
@@ -283,3 +266,86 @@ class TestFetchUsage:
             with pytest.raises(RateLimitedError) as exc_info:
                 await poller.fetch_usage("fake-token")
         assert exc_info.value.retry_after == poller.RATE_LIMIT_BACKOFF_MAX_SEC
+
+    @pytest.mark.asyncio
+    async def test_401_raises_auth_error(self):
+        import httpx
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.headers = {}
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Unauthorized", request=MagicMock(), response=mock_response
+        )
+
+        with patch("poller.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+            instance.get = AsyncMock(return_value=mock_response)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=instance)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with pytest.raises(AuthError):
+                await poller.fetch_usage("fake-token")
+
+
+# ── AuthError flag on UsagePoller ─────────────────────────────────────────────
+
+class TestAuthErrorFlag:
+
+    def test_auth_error_false_by_default(self, isolated_state, isolated_db):
+        p = poller.UsagePoller()
+        assert p.auth_error is False
+
+    @pytest.mark.asyncio
+    async def test_force_refresh_sets_auth_error_on_401(self, isolated_state, isolated_db):
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", new_callable=AsyncMock, side_effect=AuthError()):
+            p = poller.UsagePoller()
+            result = await p.force_refresh()
+        assert result is None
+        assert p.auth_error is True
+
+    @pytest.mark.asyncio
+    async def test_force_refresh_clears_auth_error_on_success(self, isolated_state, isolated_db):
+        snap = make_usage_snapshot()
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", new_callable=AsyncMock, side_effect=AuthError()):
+            p = poller.UsagePoller()
+            await p.force_refresh()
+        assert p.auth_error is True
+
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", new_callable=AsyncMock, return_value=snap), \
+             patch("poller.store_snapshot"), \
+             patch("poller.save_state"):
+            result = await p.force_refresh()
+        assert result is not None
+        assert p.auth_error is False
+
+    @pytest.mark.asyncio
+    async def test_run_loop_auth_error_sets_and_clears_flag(self, isolated_state, isolated_db):
+        snap = make_usage_snapshot()
+        p = poller.UsagePoller()
+        p._current = snap  # give the poller a current snapshot so staleness can be checked
+
+        states_before_success = []
+        call_count = 0
+
+        async def fake_fetch(token):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise AuthError()
+            # Capture flag state just before the success clears it
+            states_before_success.append(p.auth_error)
+            p.stop()
+            return snap
+
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", side_effect=fake_fetch), \
+             patch("poller.store_snapshot"), \
+             patch("poller.save_state"), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            await p.run()
+
+        assert states_before_success == [True], "auth_error should be True between 401 and next success"
+        assert p.auth_error is False, "auth_error should clear after a successful poll"

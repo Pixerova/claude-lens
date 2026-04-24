@@ -282,6 +282,7 @@ def health():
     return {
         "status":           "ok",
         "authenticated":    is_authenticated(),
+        "authError":        _poller.auth_error if _poller else False,
         "lastPollAt":       snap.recorded_at if snap else None,
         "pollIntervalSec":  _poller.interval_sec if _poller else None,
         "isStale":          snap.is_stale if snap else True,
@@ -324,6 +325,8 @@ async def usage_refresh():
         raise HTTPException(status_code=503, detail="Poller not running")
     snap = await _poller.force_refresh()
     if not snap:
+        if _poller.auth_error:
+            raise HTTPException(status_code=401, detail="OAuth token rejected — re-authenticate Claude Code")
         raise HTTPException(status_code=502, detail="Failed to fetch usage from Anthropic API")
     return _snapshot_to_dict(snap)
 
