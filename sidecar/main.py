@@ -29,7 +29,7 @@ from pydantic import BaseModel
 import db
 import pricing
 from keychain import is_authenticated, get_oauth_token
-from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS
+from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS, AuthError
 from parser import scan_all_sessions, start_watchers
 from suggestions_loader import load_suggestions
 from trigger_evaluator import evaluate_triggers, build_trigger_context
@@ -282,6 +282,7 @@ def health():
     return {
         "status":           "ok",
         "authenticated":    is_authenticated(),
+        "authError":        _poller.auth_error if _poller else False,
         "lastPollAt":       snap.recorded_at if snap else None,
         "pollIntervalSec":  _poller.interval_sec if _poller else None,
         "isStale":          snap.is_stale if snap else True,

@@ -65,6 +65,7 @@ export interface ChartPoint {
 export interface Health {
   status: string;
   authenticated: boolean;
+  authError: boolean;
   lastPollAt: string | null;
   pollIntervalSec: number | null;
   isStale: boolean;

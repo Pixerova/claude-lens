@@ -15,6 +15,7 @@ import poller
 from poller import (
     UsageSnapshot,
     RateLimitedError,
+    AuthError,
     compute_interval,
     load_state,
     save_state,
@@ -283,3 +284,66 @@ class TestFetchUsage:
             with pytest.raises(RateLimitedError) as exc_info:
                 await poller.fetch_usage("fake-token")
         assert exc_info.value.retry_after == poller.RATE_LIMIT_BACKOFF_MAX_SEC
+
+    @pytest.mark.asyncio
+    async def test_401_raises_auth_error(self):
+        import httpx
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.headers = {}
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Unauthorized", request=MagicMock(), response=mock_response
+        )
+
+        with patch("poller.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+            instance.get = AsyncMock(return_value=mock_response)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=instance)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with pytest.raises(AuthError):
+                await poller.fetch_usage("fake-token")
+
+
+# ── AuthError flag on UsagePoller ─────────────────────────────────────────────
+
+class TestAuthErrorFlag:
+    def _make_snapshot(self) -> UsageSnapshot:
+        now = datetime.now(timezone.utc).isoformat()
+        return UsageSnapshot(
+            session_pct=0.30,
+            session_resets_at=(datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(),
+            weekly_pct=0.40,
+            weekly_resets_at=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+            recorded_at=now,
+        )
+
+    def test_auth_error_false_by_default(self, isolated_state, isolated_db):
+        p = poller.UsagePoller()
+        assert p.auth_error is False
+
+    @pytest.mark.asyncio
+    async def test_force_refresh_sets_auth_error_on_401(self, isolated_state, isolated_db):
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", new_callable=AsyncMock, side_effect=AuthError()):
+            p = poller.UsagePoller()
+            result = await p.force_refresh()
+        assert result is None
+        assert p.auth_error is True
+
+    @pytest.mark.asyncio
+    async def test_force_refresh_clears_auth_error_on_success(self, isolated_state, isolated_db):
+        snap = self._make_snapshot()
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", new_callable=AsyncMock, side_effect=AuthError()):
+            p = poller.UsagePoller()
+            await p.force_refresh()
+        assert p.auth_error is True
+
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", new_callable=AsyncMock, return_value=snap), \
+             patch("poller.store_snapshot"), \
+             patch("poller.save_state"):
+            result = await p.force_refresh()
+        assert result is not None
+        assert p.auth_error is False

@@ -61,6 +61,10 @@ class RateLimitedError(Exception):
         super().__init__(f"Rate limited — retry after {retry_after}s")
 
 
+class AuthError(Exception):
+    """Raised when the API returns 401 — token expired or invalid."""
+
+
 # ── Data model ────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -172,6 +176,7 @@ async def fetch_usage(token: str) -> Optional[UsageSnapshot]:
             raise RateLimitedError(retry_after)
         elif exc.response.status_code == 401:
             log.error("OAuth token rejected (401) — may need to re-authenticate Claude Code")
+            raise AuthError()
         else:
             log.warning("Usage API returned %s", exc.response.status_code)
     except httpx.RequestError as exc:
@@ -203,6 +208,7 @@ class UsagePoller:
         self._current, saved_interval = load_state()
         self._backoff_sec: int = 0
         self._running = False
+        self._auth_error: bool = False
 
         # Calculate how long to wait before the first poll based on saved state.
         # If we restarted before the saved interval elapsed, wait the remainder
@@ -228,6 +234,10 @@ class UsagePoller:
     @property
     def interval_sec(self) -> int:
         return self._interval_sec
+
+    @property
+    def auth_error(self) -> bool:
+        return self._auth_error
 
     def stop(self) -> None:
         self._running = False
@@ -260,10 +270,16 @@ class UsagePoller:
                 )
                 await asyncio.sleep(wait)
                 continue
+            except AuthError:
+                self._auth_error = True
+                if self._current:
+                    self._current.is_stale = True
+                snapshot = None
 
             if snapshot:
                 consecutive_failures = 0
                 self._backoff_sec = 0
+                self._auth_error = False
                 self._current = snapshot
 
                 store_snapshot(
@@ -311,8 +327,13 @@ class UsagePoller:
         token = get_oauth_token()
         if not token:
             return None
-        snapshot = await fetch_usage(token)
+        try:
+            snapshot = await fetch_usage(token)
+        except AuthError:
+            self._auth_error = True
+            return None
         if snapshot:
+            self._auth_error = False
             self._current = snapshot
             self._backoff_sec = 0
             store_snapshot(
