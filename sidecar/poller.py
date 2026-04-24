@@ -140,7 +140,9 @@ def compute_interval(
 async def fetch_usage(token: str) -> Optional[UsageSnapshot]:
     """
     Call the Anthropic OAuth usage endpoint.
-    Returns a UsageSnapshot on success, None on failure.
+    Returns a UsageSnapshot on success, None on transient/unexpected failure.
+    Raises AuthError on 401 (token expired or invalid).
+    Raises RateLimitedError on 429.
     """
     headers = {
         "Authorization": f"Bearer {token}",
@@ -274,7 +276,9 @@ class UsagePoller:
                 self._auth_error = True
                 if self._current:
                     self._current.is_stale = True
-                snapshot = None
+                log.warning("Auth error (401) — retrying in %ds", BACKOFF_MAX_SEC)
+                await asyncio.sleep(BACKOFF_MAX_SEC)
+                continue
 
             if snapshot:
                 consecutive_failures = 0

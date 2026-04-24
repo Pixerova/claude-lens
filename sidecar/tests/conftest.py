@@ -45,6 +45,19 @@ def isolated_state(tmp_path, monkeypatch):
 
 # ── Sample data factories ─────────────────────────────────────────────────────
 
+def make_usage_snapshot(session_pct=0.30, weekly_pct=0.40):
+    """Return a UsageSnapshot dataclass instance (for poller unit tests)."""
+    from poller import UsageSnapshot
+    now = datetime.now(timezone.utc)
+    return UsageSnapshot(
+        session_pct=session_pct,
+        session_resets_at=(now + timedelta(hours=3)).isoformat(),
+        weekly_pct=weekly_pct,
+        weekly_resets_at=(now + timedelta(days=2)).isoformat(),
+        recorded_at=now.isoformat(),
+    )
+
+
 def make_snapshot(session_pct=0.21, weekly_pct=0.25, offset_minutes=0):
     """Return a dict of plan usage snapshot kwargs."""
     base = datetime.now(timezone.utc) - timedelta(minutes=offset_minutes)

@@ -73,10 +73,17 @@ export function useUsage(): UseUsageResult {
         }
         setAuthError(health.authError ?? false);
       } catch {
-        // Health check failure is non-fatal; fall back to local table.
+        // Health check failure is non-fatal; keep the current authError value
+        // rather than clearing it, to avoid hiding a real auth problem.
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch usage");
+      // A 401 from /usage/refresh means auth failure, not a sidecar outage.
+      // Show the auth banner rather than the generic error panel.
+      if (err instanceof Error && err.message.includes("Sidecar 401")) {
+        setAuthError(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to fetch usage");
+      }
     } finally {
       setLoading(false);
     }

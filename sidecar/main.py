@@ -29,7 +29,7 @@ from pydantic import BaseModel
 import db
 import pricing
 from keychain import is_authenticated, get_oauth_token
-from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS, AuthError
+from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS
 from parser import scan_all_sessions, start_watchers
 from suggestions_loader import load_suggestions
 from trigger_evaluator import evaluate_triggers, build_trigger_context
@@ -325,6 +325,8 @@ async def usage_refresh():
         raise HTTPException(status_code=503, detail="Poller not running")
     snap = await _poller.force_refresh()
     if not snap:
+        if _poller.auth_error:
+            raise HTTPException(status_code=401, detail="OAuth token rejected — re-authenticate Claude Code")
         raise HTTPException(status_code=502, detail="Failed to fetch usage from Anthropic API")
     return _snapshot_to_dict(snap)
 
