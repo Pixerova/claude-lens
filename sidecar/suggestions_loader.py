@@ -64,8 +64,8 @@ def _parse_yaml_file(path: Path) -> list | None:
     """Read and parse a suggestions YAML file.
 
     Returns:
-        list  — raw entries (may be [] if suggestions key is empty or malformed structure).
-        None  — file is missing or YAML cannot be parsed; caller should preserve its cache.
+        list  — raw entries from the 'suggestions' key (may be [] for an empty list).
+        None  — file is missing, unparseable, or structurally invalid; caller should preserve its cache.
     """
     if not path.exists():
         log.error("Suggestions file not found at %s.", path)
@@ -82,12 +82,12 @@ def _parse_yaml_file(path: Path) -> list | None:
             "Suggestions file at %s has unexpected structure — expected a 'suggestions' key.",
             path,
         )
-        return []
+        return None
 
     entries = raw.get("suggestions")
     if not isinstance(entries, list):
         log.error("Suggestions file at %s: 'suggestions' key is not a list.", path)
-        return []
+        return None
 
     return entries
 

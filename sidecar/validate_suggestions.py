@@ -138,7 +138,10 @@ def main() -> int:
         return 0
 
     is_file_error = any(
-        "File not found" in e or "parse error" in e or "Unexpected file structure" in e
+        "File not found" in e
+        or "parse error" in e
+        or "Unexpected file structure" in e
+        or "must be a list" in e
         for e in errors
     )
 

@@ -154,6 +154,12 @@ class TestValidateFile:
         assert ok is False
         assert len(errors) > 0
 
+    def test_suggestions_not_a_list_is_file_error(self, tmp_path):
+        p = _write(tmp_path, "version: '1.0'\nsuggestions: 42\n")
+        ok, errors, _ = validate_file(p)
+        assert ok is False
+        assert any("must be a list" in e for e in errors)
+
     def test_id_missing_prefix_fails(self, tmp_path):
         p = _write(tmp_path, """
             version: "1.0"
