@@ -28,18 +28,7 @@ from typing import Any
 
 import yaml
 
-CUSTOM_PREFIX = "custom_"
-VALID_TRIGGERS = {"always", "low_utilization_eow", "post_reset"}
-REQUIRED_FIELDS = {
-    "id",
-    "category",
-    "title",
-    "description",
-    "prompt",
-    "trigger",
-    "show_every_n_days",
-    "actions",
-}
+from suggestions_schema import CUSTOM_PREFIX, VALID_TRIGGERS, REQUIRED_FIELDS
 
 _DEFAULT_PATH = Path.home() / ".claudelens" / "custom_suggestions.yaml"
 
@@ -95,32 +84,33 @@ def _check_entry(entry: Any, index: int) -> list[str]:
     return errors
 
 
-def validate_file(path: Path) -> tuple[bool, list[str]]:
+def validate_file(path: Path) -> tuple[bool, list[str], int]:
     """Validate a custom suggestions YAML file.
 
-    Returns (ok, errors). ok is True when all entries pass validation.
+    Returns (ok, errors, count). ok is True when all entries pass validation.
+    count is the number of entries in the file (0 on file-level errors).
     Errors starting with 'File not found' or containing 'parse error' indicate
     a file-level problem rather than entry-level validation failures.
     """
     if not path.exists():
-        return False, [f"File not found: {path}"]
+        return False, [f"File not found: {path}"], 0
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        return False, [f"YAML parse error: {exc}"]
+        return False, [f"YAML parse error: {exc}"], 0
 
     if not isinstance(raw, dict) or "suggestions" not in raw:
         return False, [
             "Unexpected file structure — expected a 'suggestions' key at the top level"
-        ]
+        ], 0
 
     entries = raw.get("suggestions")
     if not isinstance(entries, list):
-        return False, ["'suggestions' must be a list"]
+        return False, ["'suggestions' must be a list"], 0
 
     if len(entries) == 0:
-        return True, []
+        return True, [], 0
 
     all_errors: list[str] = []
     seen_ids: set[str] = set()
@@ -134,21 +124,16 @@ def validate_file(path: Path) -> tuple[bool, list[str]]:
                 all_errors.append(f"Entry #{i} (id={sid!r}): duplicate id")
             seen_ids.add(sid)
 
-    return len(all_errors) == 0, all_errors
+    return len(all_errors) == 0, all_errors, len(entries)
 
 
 def main() -> int:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else _DEFAULT_PATH
 
     print(f"Validating: {path}")
-    ok, errors = validate_file(path)
+    ok, errors, count = validate_file(path)
 
     if ok:
-        count = sum(
-            1
-            for _ in (yaml.safe_load(path.read_text(encoding="utf-8")) or {})
-            .get("suggestions", [])
-        )
         print(f"  {count} {'entry' if count == 1 else 'entries'}, all valid.")
         return 0
 

@@ -25,15 +25,14 @@ from typing import Any
 
 import yaml
 
+from suggestions_schema import CUSTOM_PREFIX, VALID_TRIGGERS, REQUIRED_FIELDS
+
 log = logging.getLogger(__name__)
 
 _BUNDLED_YAML = Path(__file__).parent / "data" / "suggestions.yaml"
 _CUSTOM_TEMPLATE = Path(__file__).parent / "data" / "custom_suggestions_template.yaml"
 _CUSTOM_YAML = Path.home() / ".claudelens" / "custom_suggestions.yaml"
 
-CUSTOM_PREFIX = "custom_"
-
-VALID_TRIGGERS = {"always", "low_utilization_eow", "post_reset"}
 VALID_CATEGORIES = {
     "code_health",
     "dependencies",
@@ -43,16 +42,6 @@ VALID_CATEGORIES = {
     "productivity",
     "security",
     "testing",
-}
-REQUIRED_FIELDS = {
-    "id",
-    "category",
-    "title",
-    "description",
-    "prompt",
-    "trigger",
-    "show_every_n_days",
-    "actions",
 }
 
 
@@ -72,10 +61,15 @@ def _ensure_custom_file() -> Path:
 
 
 def _parse_yaml_file(path: Path) -> list | None:
-    """Read and parse a suggestions YAML file. Returns the raw entries list or None on error."""
+    """Read and parse a suggestions YAML file.
+
+    Returns:
+        list  — raw entries (may be [] if suggestions key is empty or malformed structure).
+        None  — file is missing or YAML cannot be parsed; caller should preserve its cache.
+    """
     if not path.exists():
         log.error("Suggestions file not found at %s.", path)
-        return []
+        return None
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -231,10 +225,13 @@ def _load_bundled(path: Path | None = None) -> list[dict] | None:
 def _load_custom(path: Path | None = None) -> list[dict] | None:
     """Load and validate custom suggestions.
 
-    Returns a list of validated dicts (each with source='custom'), or None if
-    the file cannot be parsed. A missing file returns [] rather than None.
+    Returns a list of validated dicts (each with source='custom'), [] if the
+    file is absent (normal on first launch when template is missing), or None
+    if the file exists but cannot be parsed (caller should log and fall back).
     """
     source = path if path is not None else _ensure_custom_file()
+    if not source.exists():
+        return []
     entries = _parse_yaml_file(source)
     if entries is None:
         return None

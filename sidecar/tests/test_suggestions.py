@@ -797,7 +797,7 @@ class TestSuggestionsLoader:
         # bundled comes first
         assert results[0]["id"] == "testing001"
 
-    def test_custom_id_collision_with_bundled_is_dropped(self, tmp_path):
+    def test_custom_without_prefix_is_dropped_by_load_custom(self, tmp_path):
         bundled = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
@@ -810,8 +810,6 @@ class TestSuggestionsLoader:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        # A custom_ suggestion whose id matches a bundled one is impossible by
-        # prefix rules, but we verify the collision guard works anyway.
         custom_p = tmp_path / "custom_suggestions.yaml"
         custom_p.write_text(textwrap.dedent("""
             version: "1.0"
@@ -825,7 +823,10 @@ class TestSuggestionsLoader:
                 show_every_n_days: 3
                 actions: [copy_prompt]
         """))
-        # The custom entry lacks the custom_ id prefix so _load_custom skips it.
+        # The custom entry lacks the custom_ id prefix so _load_custom rejects it
+        # at the require_custom_prefix validation step — never reaches the merge.
+        # (The merge-level collision guard in load_suggestions is belt-and-suspenders:
+        # custom_ prefix rules make a true id collision structurally impossible.)
         results = load_suggestions(bundled_yaml_path=bundled, custom_yaml_path=custom_p)
         assert len(results) == 1
         assert results[0]["source"] == "bundled"

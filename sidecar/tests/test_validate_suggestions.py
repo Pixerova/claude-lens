@@ -126,31 +126,31 @@ class TestValidateFile:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is True
         assert errors == []
 
     def test_empty_suggestions_list_is_valid(self, tmp_path):
         p = _write(tmp_path, "version: '1.0'\nsuggestions: []\n")
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is True
         assert errors == []
 
     def test_file_not_found(self, tmp_path):
-        ok, errors = validate_file(tmp_path / "nonexistent.yaml")
+        ok, errors, _ = validate_file(tmp_path / "nonexistent.yaml")
         assert ok is False
         assert any("File not found" in e for e in errors)
 
     def test_yaml_parse_error(self, tmp_path):
         p = tmp_path / "custom_suggestions.yaml"
         p.write_text("key: [unclosed\n  - bad\n")
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is False
         assert any("parse error" in e for e in errors)
 
     def test_missing_suggestions_key(self, tmp_path):
         p = _write(tmp_path, "version: '1.0'\nother_key: []\n")
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is False
         assert len(errors) > 0
 
@@ -167,7 +167,7 @@ class TestValidateFile:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is False
         assert any("id must start with 'custom_'" in e for e in errors)
 
@@ -184,7 +184,7 @@ class TestValidateFile:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is False
         assert any("category must start with 'custom_'" in e for e in errors)
 
@@ -209,7 +209,7 @@ class TestValidateFile:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is False
         assert any("duplicate id" in e for e in errors)
 
@@ -234,7 +234,7 @@ class TestValidateFile:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is False
         assert any("bad_id" in e for e in errors)
 
@@ -251,7 +251,7 @@ class TestValidateFile:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is False
         assert any("invalid trigger" in e for e in errors)
 
@@ -270,5 +270,5 @@ class TestValidateFile:
             for i, trigger in enumerate(["always", "low_utilization_eow", "post_reset"])
         )
         p = _write(tmp_path, f"version: '1.0'\nsuggestions:\n{entries}")
-        ok, errors = validate_file(p)
+        ok, errors, _ = validate_file(p)
         assert ok is True, errors

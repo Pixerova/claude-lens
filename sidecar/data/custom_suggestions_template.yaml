@@ -2,8 +2,8 @@
 # Claude Lens — Custom Suggestions
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Add your own suggestions here. Claude Lens loads this file alongside the
-# built-in suggestions on every launch — no restart required for new entries.
+# Add your own suggestions here. Claude Lens loads this file at startup
+# alongside the built-in suggestions — restart the sidecar to pick up changes.
 #
 # REQUIREMENTS
 # ────────────
