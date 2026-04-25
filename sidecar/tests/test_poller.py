@@ -6,7 +6,7 @@ macOS Keychain required.
 """
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time as dtime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,9 +18,14 @@ from poller import (
     RateLimitedError,
     AuthError,
     compute_interval,
+    _effective_interval,
+    _is_in_working_hours,
+    _parse_hhmm,
     load_state,
     save_state,
     DEFAULT_THRESHOLDS,
+    RATE_LIMIT_BACKOFF_MIN_SEC,
+    SLEEP_INTERVAL_SEC,
 )
 
 
@@ -57,6 +62,96 @@ class TestComputeInterval:
         assert compute_interval(0.90, 0.00) == 30
         # Just below 0.90 should hit "high"
         assert compute_interval(0.899, 0.00) == 60
+
+
+# ── _effective_interval ───────────────────────────────────────────────────────
+
+class TestEffectiveInterval:
+    """At 100% session, sleep until reset; otherwise delegate to compute_interval."""
+
+    def test_at_100pct_returns_secs_until_reset(self):
+        future = datetime.now(timezone.utc) + timedelta(seconds=3700)
+        snap = UsageSnapshot(
+            session_pct=1.0,
+            session_resets_at=future.isoformat(),
+            weekly_pct=0.10,
+            weekly_resets_at="",
+            recorded_at="",
+        )
+        interval = _effective_interval(snap)
+        # Should be close to 3700, not the 30s critical-tier interval
+        assert interval > 3600
+        assert interval <= 3700
+
+    def test_above_100pct_also_sleeps_until_reset(self):
+        # The API could theoretically return slightly over 100 due to rounding
+        future = datetime.now(timezone.utc) + timedelta(seconds=1800)
+        snap = UsageSnapshot(
+            session_pct=1.01,
+            session_resets_at=future.isoformat(),
+            weekly_pct=0.10,
+            weekly_resets_at="",
+            recorded_at="",
+        )
+        interval = _effective_interval(snap)
+        assert interval > 1700
+        assert interval <= 1800
+
+    def test_at_100pct_with_past_reset_falls_back(self):
+        past = datetime.now(timezone.utc) - timedelta(seconds=60)
+        snap = UsageSnapshot(
+            session_pct=1.0,
+            session_resets_at=past.isoformat(),
+            weekly_pct=0.10,
+            weekly_resets_at="",
+            recorded_at="",
+        )
+        # Reset already passed — fall back to normal interval for 100% (30s tier)
+        assert _effective_interval(snap) == 30
+
+    def test_at_100pct_with_missing_reset_falls_back(self):
+        snap = UsageSnapshot(
+            session_pct=1.0,
+            session_resets_at="",
+            weekly_pct=0.10,
+            weekly_resets_at="",
+            recorded_at="",
+        )
+        assert _effective_interval(snap) == 30
+
+    def test_at_100pct_with_malformed_reset_falls_back(self):
+        snap = UsageSnapshot(
+            session_pct=1.0,
+            session_resets_at="not-a-date",
+            weekly_pct=0.10,
+            weekly_resets_at="",
+            recorded_at="",
+        )
+        assert _effective_interval(snap) == 30
+
+    def test_below_100pct_delegates_to_compute_interval(self):
+        snap = UsageSnapshot(
+            session_pct=0.95,
+            session_resets_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+            weekly_pct=0.10,
+            weekly_resets_at="",
+            recorded_at="",
+        )
+        assert _effective_interval(snap) == compute_interval(0.95, 0.10)
+
+    def test_z_suffix_iso_string_parsed_correctly(self):
+        future = datetime.now(timezone.utc) + timedelta(seconds=500)
+        # Simulate the Z-suffix format the API actually returns
+        resets_at_z = future.strftime("%Y-%m-%dT%H:%M:%SZ")
+        snap = UsageSnapshot(
+            session_pct=1.0,
+            session_resets_at=resets_at_z,
+            weekly_pct=0.10,
+            weekly_resets_at="",
+            recorded_at="",
+        )
+        interval = _effective_interval(snap)
+        assert 0 < interval <= 500
 
 
 # ── State file (load_state / save_state) ─────────────────────────────────────
@@ -248,6 +343,61 @@ class TestFetchUsage:
         assert exc_info.value.retry_after == 120
 
     @pytest.mark.asyncio
+    async def test_429_with_zero_retry_after_enforces_minimum(self):
+        """Retry-After: 0 must not result in an immediate retry."""
+        import httpx
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.headers = {"Retry-After": "0"}
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Rate limited", request=MagicMock(), response=mock_response
+        )
+
+        with patch("poller.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+            instance.get = AsyncMock(return_value=mock_response)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=instance)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with pytest.raises(RateLimitedError) as exc_info:
+                await poller.fetch_usage("fake-token")
+        # fetch_usage raises with retry_after=0; the run loop enforces the floor
+        assert exc_info.value.retry_after == 0
+
+    @pytest.mark.asyncio
+    async def test_run_loop_enforces_minimum_backoff_on_zero_retry_after(
+        self, isolated_state, isolated_db
+    ):
+        """Run loop must wait at least RATE_LIMIT_BACKOFF_MIN_SEC even if Retry-After is 0."""
+        snap = make_usage_snapshot()
+        p = poller.UsagePoller()
+        p._current = snap
+
+        sleep_args = []
+        call_count = 0
+
+        async def fake_fetch(token):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RateLimitedError(retry_after=0)
+            p.stop()
+            return snap
+
+        async def fake_sleep(secs):
+            sleep_args.append(secs)
+
+        with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", side_effect=fake_fetch), \
+             patch("poller.store_snapshot"), \
+             patch("poller.save_state"), \
+             patch("asyncio.sleep", side_effect=fake_sleep):
+            await p.run()
+
+        # First sleep must be the enforced minimum, not 0
+        assert sleep_args[0] >= RATE_LIMIT_BACKOFF_MIN_SEC
+
+    @pytest.mark.asyncio
     async def test_429_uses_default_retry_after_when_header_missing(self):
         import httpx
         mock_response = MagicMock()
@@ -349,3 +499,158 @@ class TestAuthErrorFlag:
 
         assert states_before_success == [True], "auth_error should be True between 401 and next success"
         assert p.auth_error is False, "auth_error should clear after a successful poll"
+
+
+# ── Working hours / sleep mode ────────────────────────────────────────────────
+
+class TestParseHhmm:
+    def test_parses_valid_string(self):
+        assert _parse_hhmm("09:00") == dtime(9, 0)
+        assert _parse_hhmm("17:30") == dtime(17, 30)
+
+    def test_raises_on_bad_format(self):
+        with pytest.raises((ValueError, TypeError)):
+            _parse_hhmm("9am")
+
+
+class TestIsInWorkingHours:
+    """_is_in_working_hours accepts injectable _now_local/_now_utc for testing."""
+
+    START = dtime(9, 0)
+    END   = dtime(17, 0)
+
+    # A fixed "now" UTC value used throughout — well in the past so active_until
+    # comparisons are deterministic.
+    NOW_UTC = datetime(2026, 4, 24, 18, 0, 0, tzinfo=timezone.utc)
+
+    FAR_FUTURE = datetime(2026, 4, 24, 23, 0, 0, tzinfo=timezone.utc)
+    EXPIRED    = datetime(2026, 4, 24, 14, 0, 0, tzinfo=timezone.utc)  # before NOW_UTC
+
+    def _local(self, hour, minute=0) -> datetime:
+        return datetime(2026, 4, 24, hour, minute, 0)
+
+    def test_inside_core_window_is_awake(self):
+        assert _is_in_working_hours(
+            self.START, self.END, self.EXPIRED,
+            _now_local=self._local(12), _now_utc=self.NOW_UTC,
+        ) is True
+
+    def test_at_start_boundary_is_awake(self):
+        assert _is_in_working_hours(
+            self.START, self.END, self.EXPIRED,
+            _now_local=self._local(9, 0), _now_utc=self.NOW_UTC,
+        ) is True
+
+    def test_at_end_boundary_is_awake(self):
+        assert _is_in_working_hours(
+            self.START, self.END, self.EXPIRED,
+            _now_local=self._local(17, 0), _now_utc=self.NOW_UTC,
+        ) is True
+
+    def test_before_start_is_sleeping_regardless_of_extension(self):
+        # active_until in the future should NOT override pre-start sleep
+        assert _is_in_working_hours(
+            self.START, self.END, self.FAR_FUTURE,
+            _now_local=self._local(7), _now_utc=self.NOW_UTC,
+        ) is False
+
+    def test_after_end_no_extension_is_sleeping(self):
+        assert _is_in_working_hours(
+            self.START, self.END, self.EXPIRED,
+            _now_local=self._local(18), _now_utc=self.NOW_UTC,
+        ) is False
+
+    def test_after_end_with_active_extension_is_awake(self):
+        assert _is_in_working_hours(
+            self.START, self.END, self.FAR_FUTURE,
+            _now_local=self._local(18), _now_utc=self.NOW_UTC,
+        ) is True
+
+    def test_extension_expired_after_end_is_sleeping(self):
+        # active_until is in the past relative to _now_utc
+        assert _is_in_working_hours(
+            self.START, self.END, self.EXPIRED,
+            _now_local=self._local(18), _now_utc=self.NOW_UTC,
+        ) is False
+
+
+class TestUsagePollerWorkingHours:
+
+    def test_is_sleeping_false_when_not_configured(self, isolated_state, isolated_db):
+        p = poller.UsagePoller()
+        assert p.is_sleeping is False
+
+    def test_active_until_is_none_without_working_hours(self, isolated_state, isolated_db):
+        p = poller.UsagePoller()
+        assert p.active_until is None
+
+    def test_active_until_exposed_when_configured(self, isolated_state, isolated_db):
+        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        assert p.active_until is not None
+
+    def test_extend_active_window_bumps_active_until(self, isolated_state, isolated_db):
+        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        before = p.active_until
+        p.extend_active_window()
+        assert p.active_until > before
+
+    def test_extend_does_not_reduce_active_until(self, isolated_state, isolated_db):
+        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        far_future = datetime.now(timezone.utc) + timedelta(hours=5)
+        with p._wh_lock:
+            p._active_until = far_future
+        p.extend_active_window()  # now+1h < far_future — should not shrink
+        assert p.active_until == far_future
+
+    def test_invalid_working_hours_disables_sleep(self, isolated_state, isolated_db):
+        p = poller.UsagePoller(working_hours={"start": "bad", "end": "data"})
+        assert p.is_sleeping is False
+        assert p.active_until is None
+
+    @pytest.mark.asyncio
+    async def test_run_loop_uses_sleep_interval_when_sleeping(self, isolated_state, isolated_db):
+        snap = make_usage_snapshot(session_pct=0.50)
+        sleep_args = []
+
+        async def fake_fetch(token):
+            p.stop()
+            return snap
+
+        async def fake_sleep(secs):
+            sleep_args.append(secs)
+
+        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        # Force the poller into sleeping state by patching _is_in_working_hours
+        with patch("poller._is_in_working_hours", return_value=False), \
+             patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", side_effect=fake_fetch), \
+             patch("poller.store_snapshot"), \
+             patch("poller.save_state"), \
+             patch("asyncio.sleep", side_effect=fake_sleep):
+            await p.run()
+
+        assert sleep_args == [SLEEP_INTERVAL_SEC]
+
+    @pytest.mark.asyncio
+    async def test_run_loop_uses_normal_interval_during_working_hours(self, isolated_state, isolated_db):
+        snap = make_usage_snapshot(session_pct=0.50)
+        sleep_args = []
+
+        async def fake_fetch(token):
+            p.stop()
+            return snap
+
+        async def fake_sleep(secs):
+            sleep_args.append(secs)
+
+        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        # Force awake state
+        with patch("poller._is_in_working_hours", return_value=True), \
+             patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
+             patch("poller.fetch_usage", side_effect=fake_fetch), \
+             patch("poller.store_snapshot"), \
+             patch("poller.save_state"), \
+             patch("asyncio.sleep", side_effect=fake_sleep):
+            await p.run()
+
+        assert sleep_args == [300]   # 50% session → normal tier (300s)

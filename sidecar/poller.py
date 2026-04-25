@@ -9,6 +9,10 @@ Polls GET https://api.anthropic.com/api/oauth/usage on an adaptive schedule:
   ≥ 5%   → every 1800 s (low)
   < 5%   → every 3600 s (minimal)
 
+Outside working hours the poller enters sleep mode and polls every 30 minutes
+instead. If new Claude session activity is detected after end-of-day, the active
+window is extended by one hour from the last detected event.
+
 On 429, respects the Retry-After header and backs off up to a 2-hour cap.
 On other errors, backs off exponentially up to a 10-min cap.
 On restart, honours the saved poll interval to avoid an immediate burst.
@@ -18,9 +22,9 @@ The last known good response is always persisted to state.json for offline displ
 import asyncio
 import json
 import logging
-import time
+import threading
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, time as dtime
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -48,8 +52,10 @@ DEFAULT_THRESHOLDS: list[tuple[float, int]] = [
     (0.00, 3600),
 ]
 
-BACKOFF_MAX_SEC = 600        # 10 minutes — for transient errors
+BACKOFF_MAX_SEC = 600              # 10 minutes — for transient errors
+RATE_LIMIT_BACKOFF_MIN_SEC = 60    # never back off less than 1 minute on 429
 RATE_LIMIT_BACKOFF_MAX_SEC = 7200  # 2 hours — for 429s
+SLEEP_INTERVAL_SEC = 1800          # 30 minutes — outside working hours
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -135,6 +141,76 @@ def compute_interval(
     return DEFAULT_THRESHOLDS[-1][1]
 
 
+def _effective_interval(
+    snapshot: "UsageSnapshot",
+    thresholds: list[tuple[float, int]] = DEFAULT_THRESHOLDS,
+) -> int:
+    """
+    Return the poll interval for the given snapshot.
+
+    At 100% session usage the next poll can't change anything until the session
+    resets, so we sleep exactly until `session_resets_at` rather than hammering
+    the API every 30 s.  Falls back to `compute_interval` if the reset time is
+    unparseable, already in the past, or session is below 100%.
+    """
+    if snapshot.session_pct >= 1.0 and snapshot.session_resets_at:
+        try:
+            resets_at = datetime.fromisoformat(
+                snapshot.session_resets_at.replace("Z", "+00:00")
+            )
+            secs = int((resets_at - datetime.now(timezone.utc)).total_seconds())
+            if secs > 0:
+                return secs
+        except Exception:
+            pass
+    return compute_interval(snapshot.session_pct, snapshot.weekly_pct, thresholds)
+
+
+# ── Working hours ─────────────────────────────────────────────────────────────
+
+def _parse_hhmm(hhmm: str) -> dtime:
+    """Parse "HH:MM" → datetime.time. Raises ValueError on bad input."""
+    h, m = hhmm.split(":")
+    return dtime(int(h), int(m))
+
+
+def _is_in_working_hours(
+    wh_start: dtime,
+    wh_end: dtime,
+    active_until: datetime,
+    _now_local: Optional[datetime] = None,
+    _now_utc: Optional[datetime] = None,
+) -> bool:
+    """
+    Return True if the poller should be in normal (awake) polling mode.
+
+    Two conditions:
+      1. Local wall-clock time is within [wh_start, wh_end]  (core window), OR
+      2. Local time is past wh_end AND UTC now ≤ active_until (post-EOD extension).
+
+    Pre-start-of-day is always sleeping — active_until only extends the end, not
+    the beginning, of the working day.
+
+    Working-hours comparison uses local time intentionally; the sidecar runs on
+    the user's own machine so datetime.now() reflects their timezone.
+
+    _now_local and _now_utc are injectable for tests only.
+    """
+    now_local = _now_local if _now_local is not None else datetime.now()
+    now_time = now_local.time()
+
+    if wh_start <= now_time <= wh_end:
+        return True
+
+    # Extension only applies after end-of-day
+    if now_time > wh_end:
+        now_utc = _now_utc if _now_utc is not None else datetime.now(timezone.utc)
+        if now_utc <= active_until:
+            return True
+
+    return False
+
+
 # ── API client ────────────────────────────────────────────────────────────────
 
 async def fetch_usage(token: str) -> Optional[UsageSnapshot]:
@@ -204,6 +280,7 @@ class UsagePoller:
         self,
         on_update: Optional[Callable[[UsageSnapshot], None]] = None,
         thresholds: list[tuple[float, int]] = DEFAULT_THRESHOLDS,
+        working_hours: Optional[dict] = None,
     ):
         self._on_update = on_update
         self._thresholds = thresholds
@@ -211,6 +288,25 @@ class UsagePoller:
         self._backoff_sec: int = 0
         self._running = False
         self._auth_error: bool = False
+
+        # Working hours — None means disabled (never sleep).
+        self._wh_start: Optional[dtime] = None
+        self._wh_end:   Optional[dtime] = None
+        if working_hours:
+            try:
+                self._wh_start = _parse_hhmm(working_hours["start"])
+                self._wh_end   = _parse_hhmm(working_hours["end"])
+                log.info(
+                    "Working hours: %s – %s (sleep interval %ds)",
+                    working_hours["start"], working_hours["end"], SLEEP_INTERVAL_SEC,
+                )
+            except (KeyError, ValueError) as exc:
+                log.warning("Invalid workingHours config (%s) — sleep mode disabled", exc)
+
+        # active_until starts expired so no extension is in effect on startup.
+        # extend_active_window() bumps it to now+1h when out-of-hours activity fires.
+        self._active_until: datetime = datetime.min.replace(tzinfo=timezone.utc)
+        self._wh_lock = threading.Lock()
 
         # Calculate how long to wait before the first poll based on saved state.
         # If we restarted before the saved interval elapsed, wait the remainder
@@ -241,6 +337,36 @@ class UsagePoller:
     def auth_error(self) -> bool:
         return self._auth_error
 
+    @property
+    def is_sleeping(self) -> bool:
+        """True when outside working hours with no active extension in effect."""
+        if self._wh_start is None or self._wh_end is None:
+            return False
+        with self._wh_lock:
+            active_until = self._active_until
+        return not _is_in_working_hours(self._wh_start, self._wh_end, active_until)
+
+    @property
+    def active_until(self) -> Optional[datetime]:
+        """The UTC datetime until which the active window has been extended, or None if
+        working hours are not configured."""
+        if self._wh_start is None:
+            return None
+        with self._wh_lock:
+            return self._active_until
+
+    def extend_active_window(self) -> None:
+        """Thread-safe. Extend the active window to now+1h (no-op if already further out).
+
+        Called by ActivityMonitor from the watchdog observer thread when Claude
+        session file activity is detected outside working hours.
+        """
+        candidate = datetime.now(timezone.utc) + timedelta(hours=1)
+        with self._wh_lock:
+            if candidate > self._active_until:
+                self._active_until = candidate
+        log.info("Active window extended — polling until %s", candidate.isoformat())
+
     def stop(self) -> None:
         self._running = False
 
@@ -265,7 +391,7 @@ class UsagePoller:
                 consecutive_failures += 1
                 if self._current:
                     self._current.is_stale = True
-                wait = min(exc.retry_after, RATE_LIMIT_BACKOFF_MAX_SEC)
+                wait = max(RATE_LIMIT_BACKOFF_MIN_SEC, min(exc.retry_after, RATE_LIMIT_BACKOFF_MAX_SEC))
                 log.warning(
                     "Rate limited (429) — backing off %ds (attempt %d)",
                     wait, consecutive_failures,
@@ -294,9 +420,10 @@ class UsagePoller:
                     weekly_pct=snapshot.weekly_pct,
                     weekly_resets=snapshot.weekly_resets_at,
                 )
-                self._interval_sec = compute_interval(
-                    snapshot.session_pct, snapshot.weekly_pct, self._thresholds
-                )
+                self._interval_sec = _effective_interval(snapshot, self._thresholds)
+                sleeping = self.is_sleeping
+                if sleeping:
+                    self._interval_sec = SLEEP_INTERVAL_SEC
                 save_state(snapshot, self._interval_sec)
 
                 if self._on_update:
@@ -305,10 +432,11 @@ class UsagePoller:
                         await result
 
                 log.info(
-                    "Usage: session=%.0f%% weekly=%.0f%% → next poll in %ds",
+                    "Usage: session=%.0f%% weekly=%.0f%% → next poll in %ds%s",
                     snapshot.session_pct * 100,
                     snapshot.weekly_pct * 100,
                     self._interval_sec,
+                    " (sleeping)" if sleeping else "",
                 )
                 await asyncio.sleep(self._interval_sec)
 
@@ -352,9 +480,9 @@ class UsagePoller:
                 weekly_pct=snapshot.weekly_pct,
                 weekly_resets=snapshot.weekly_resets_at,
             )
-            self._interval_sec = compute_interval(
-                snapshot.session_pct, snapshot.weekly_pct, self._thresholds
-            )
+            self._interval_sec = _effective_interval(snapshot, self._thresholds)
+            if self.is_sleeping:
+                self._interval_sec = SLEEP_INTERVAL_SEC
             save_state(snapshot, self._interval_sec)
             if self._on_update:
                 result = self._on_update(snapshot)
