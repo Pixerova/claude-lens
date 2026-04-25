@@ -1,15 +1,19 @@
 """
 suggestions_loader.py — Suggestions YAML loader.
 
-Loads and validates suggestion definitions from suggestions.yaml.
+Loads and merges suggestion definitions from two sources:
 
-Bootstrap behaviour:
-  - On first launch, the bundled copy (sidecar/data/suggestions.yaml) is
-    copied to ~/.claudelens/suggestions.yaml.
-  - On subsequent launches, the user copy is read, allowing local additions.
+  1. Bundled suggestions (sidecar/data/suggestions.yaml):
+     Always read directly on every launch — never copied to the user directory.
+     Updates, removals, and additions propagate automatically.
 
-Invalid entries are skipped with a logged WARNING; valid entries load normally.
-The loader is cheap to call repeatedly — safe to call on every poll cycle.
+  2. Custom suggestions (~/.claudelens/custom_suggestions.yaml):
+     Bootstrapped from a template on first launch; never overwritten by the app.
+     All entries must have ids and categories prefixed with 'custom_'.
+
+Invalid entries are skipped with a logged WARNING. The merged list has bundled
+suggestions first, then custom additions. Bundled IDs take precedence on any
+collision.
 """
 
 from __future__ import annotations
@@ -21,15 +25,14 @@ from typing import Any
 
 import yaml
 
+from suggestions_schema import CUSTOM_PREFIX, VALID_TRIGGERS, REQUIRED_FIELDS
+
 log = logging.getLogger(__name__)
 
-# Canonical path of the bundled YAML, relative to this file's directory.
 _BUNDLED_YAML = Path(__file__).parent / "data" / "suggestions.yaml"
+_CUSTOM_TEMPLATE = Path(__file__).parent / "data" / "custom_suggestions_template.yaml"
+_CUSTOM_YAML = Path.home() / ".claudelens" / "custom_suggestions.yaml"
 
-# Where the user copy lives.
-_USER_YAML = Path.home() / ".claudelens" / "suggestions.yaml"
-
-VALID_TRIGGERS = {"always", "low_utilization_eow", "post_reset"}
 VALID_CATEGORIES = {
     "code_health",
     "dependencies",
@@ -40,76 +43,137 @@ VALID_CATEGORIES = {
     "security",
     "testing",
 }
-REQUIRED_FIELDS = {
-    "id",
-    "category",
-    "title",
-    "description",
-    "prompt",
-    "trigger",
-    "show_every_n_days",
-    "actions",
-}
 
 
-def _ensure_user_copy() -> Path:
-    """Copy bundled YAML to ~/.claudelens/ on first launch; return the user path."""
-    _USER_YAML.parent.mkdir(parents=True, exist_ok=True)
-    if not _USER_YAML.exists():
-        if not _BUNDLED_YAML.exists():
-            log.error(
-                "Bundled suggestions.yaml not found at %s — cannot bootstrap user copy.",
-                _BUNDLED_YAML,
-            )
+def _ensure_custom_file() -> Path:
+    """Bootstrap custom_suggestions.yaml from the template on first launch."""
+    _CUSTOM_YAML.parent.mkdir(parents=True, exist_ok=True)
+    if not _CUSTOM_YAML.exists():
+        if _CUSTOM_TEMPLATE.exists():
+            shutil.copy2(_CUSTOM_TEMPLATE, _CUSTOM_YAML)
+            log.info("Bootstrapped custom_suggestions.yaml → %s", _CUSTOM_YAML)
         else:
-            shutil.copy2(_BUNDLED_YAML, _USER_YAML)
-            log.info("Bootstrapped suggestions.yaml → %s", _USER_YAML)
-    return _USER_YAML
+            log.warning(
+                "Custom suggestions template not found at %s — skipping bootstrap.",
+                _CUSTOM_TEMPLATE,
+            )
+    return _CUSTOM_YAML
 
 
-def _validate_entry(entry: Any, index: int) -> dict | None:
-    """Validate a single suggestion entry.  Returns the dict or None if invalid."""
+def _parse_yaml_file(path: Path) -> list | None:
+    """Read and parse a suggestions YAML file.
+
+    Returns:
+        list  — raw entries from the 'suggestions' key (may be [] for an empty list).
+        None  — file is missing, unparseable, or structurally invalid; caller should preserve its cache.
+    """
+    if not path.exists():
+        log.error("Suggestions file not found at %s.", path)
+        return None
+
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        log.error("Suggestions file at %s is not valid YAML: %s", path, exc)
+        return None
+
+    if not isinstance(raw, dict) or "suggestions" not in raw:
+        log.error(
+            "Suggestions file at %s has unexpected structure — expected a 'suggestions' key.",
+            path,
+        )
+        return None
+
+    entries = raw.get("suggestions")
+    if not isinstance(entries, list):
+        log.error("Suggestions file at %s: 'suggestions' key is not a list.", path)
+        return None
+
+    return entries
+
+
+def _validate_entry(
+    entry: Any,
+    index: int,
+    *,
+    require_custom_prefix: bool = False,
+    reject_custom_prefix: bool = False,
+) -> dict | None:
+    """Validate a single suggestion entry. Returns the validated dict or None."""
     if not isinstance(entry, dict):
-        log.warning("suggestions.yaml entry #%d is not a mapping — skipped.", index)
+        log.warning("Suggestion entry #%d is not a mapping — skipped.", index)
         return None
 
     missing = REQUIRED_FIELDS - entry.keys()
     if missing:
         log.warning(
-            "suggestions.yaml entry #%d (id=%r) missing required fields %s — skipped.",
+            "Suggestion entry #%d (id=%r) missing required fields %s — skipped.",
             index,
             entry.get("id"),
             sorted(missing),
         )
         return None
 
-    suggestion_id = entry["id"]
+    suggestion_id = str(entry["id"])
+    category = str(entry["category"])
 
-    if entry["category"] not in VALID_CATEGORIES:
+    if require_custom_prefix:
+        if not suggestion_id.startswith(CUSTOM_PREFIX):
+            log.warning(
+                "Custom suggestion %r: id must start with %r — skipped. "
+                "Run validate_suggestions.py to check your custom_suggestions.yaml.",
+                suggestion_id,
+                CUSTOM_PREFIX,
+            )
+            return None
+        if not category.startswith(CUSTOM_PREFIX):
+            log.warning(
+                "Custom suggestion %r: category must start with %r — skipped. "
+                "Run validate_suggestions.py to check your custom_suggestions.yaml.",
+                suggestion_id,
+                CUSTOM_PREFIX,
+            )
+            return None
+
+    if reject_custom_prefix:
+        if suggestion_id.startswith(CUSTOM_PREFIX):
+            log.warning(
+                "Bundled suggestion %r: id must not start with %r — skipped.",
+                suggestion_id,
+                CUSTOM_PREFIX,
+            )
+            return None
+        if category.startswith(CUSTOM_PREFIX):
+            log.warning(
+                "Bundled suggestion %r: category must not start with %r — skipped.",
+                suggestion_id,
+                CUSTOM_PREFIX,
+            )
+            return None
+
+    if not category.startswith(CUSTOM_PREFIX) and category not in VALID_CATEGORIES:
         log.warning(
-            "suggestions.yaml entry %r has invalid category %r — skipped.",
+            "Suggestion entry %r has invalid category %r — skipped.",
             suggestion_id,
-            entry["category"],
+            category,
         )
         return None
 
-    # Schema supports list for future use; v1 uses a single string.
     raw_trigger = entry["trigger"]
     triggers = raw_trigger if isinstance(raw_trigger, list) else [raw_trigger]
-
-    invalid = set(triggers) - VALID_TRIGGERS
-    if invalid:
+    invalid_triggers = set(triggers) - VALID_TRIGGERS
+    if invalid_triggers:
         log.warning(
-            "suggestions.yaml entry %r has invalid trigger(s) %s — skipped.",
+            "Suggestion entry %r has invalid trigger(s) %s — skipped.",
             suggestion_id,
-            sorted(invalid),
+            sorted(invalid_triggers),
         )
         return None
 
     n = entry.get("show_every_n_days")
     if not isinstance(n, int) or n < 1:
         log.warning(
-            "suggestions.yaml entry %r has invalid show_every_n_days %r — skipped.",
+            "Suggestion entry %r has invalid show_every_n_days %r — skipped.",
             suggestion_id,
             n,
         )
@@ -118,7 +182,7 @@ def _validate_entry(entry: Any, index: int) -> dict | None:
     actions = entry.get("actions")
     if not isinstance(actions, list) or len(actions) == 0:
         log.warning(
-            "suggestions.yaml entry %r has empty or missing actions — skipped.",
+            "Suggestion entry %r has empty or missing actions — skipped.",
             suggestion_id,
         )
         return None
@@ -128,58 +192,103 @@ def _validate_entry(entry: Any, index: int) -> dict | None:
     return result
 
 
-def load_suggestions(user_yaml_path: Path | None = None) -> list[dict] | None:
-    """Load, validate, and return all suggestions.
+def _load_bundled(path: Path | None = None) -> list[dict] | None:
+    """Load and validate bundled suggestions.
 
-    Args:
-        user_yaml_path: Override path for the user YAML (used in tests).
-
-    Returns:
-        List of validated suggestion dicts on success (may be empty if the file
-        is valid but contains no entries).
-        None if the file cannot be parsed as YAML — the caller should keep its
-        existing cache rather than replacing it with an empty list.
-        Individual invalid entries are skipped with a WARNING and never cause
-        None to be returned.
+    Returns a list of validated dicts (each with source='bundled'), or None if
+    the file cannot be parsed — caller should keep its existing cache.
     """
-    source = user_yaml_path or _ensure_user_copy()
-
-    if not source.exists():
-        log.error("suggestions.yaml not found at %s — returning empty list.", source)
-        return []
-
-    try:
-        raw = yaml.safe_load(source.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        log.error(
-            "suggestions.yaml is not valid YAML and could not be parsed: %s", exc
-        )
-        return None  # signal: do NOT clear the caller's existing cache
-
-    if not isinstance(raw, dict) or "suggestions" not in raw:
-        log.error("suggestions.yaml has unexpected structure — returning empty list.")
-        return []
-
-    entries = raw.get("suggestions")
-    if not isinstance(entries, list):
-        log.error("suggestions.yaml 'suggestions' key is not a list — returning empty list.")
-        return []
+    source = path or _BUNDLED_YAML
+    entries = _parse_yaml_file(source)
+    if entries is None:
+        return None
 
     validated: list[dict] = []
     seen_ids: set[str] = set()
 
     for i, entry in enumerate(entries):
-        result = _validate_entry(entry, i)
+        result = _validate_entry(entry, i, reject_custom_prefix=True)
         if result is None:
             continue
         sid = result["id"]
         if sid in seen_ids:
-            log.warning(
-                "suggestions.yaml entry #%d has duplicate id %r — skipped.", i, sid
-            )
+            log.warning("Bundled suggestion entry #%d has duplicate id %r — skipped.", i, sid)
             continue
         seen_ids.add(sid)
+        result["source"] = "bundled"
         validated.append(result)
 
-    log.info("Loaded %d valid suggestions from %s.", len(validated), source)
+    log.info("Loaded %d bundled suggestions from %s.", len(validated), source)
     return validated
+
+
+def _load_custom(path: Path | None = None) -> list[dict] | None:
+    """Load and validate custom suggestions.
+
+    Returns a list of validated dicts (each with source='custom'), [] if the
+    file is absent (normal on first launch when template is missing), or None
+    if the file exists but cannot be parsed (caller should log and fall back).
+    """
+    source = path if path is not None else _ensure_custom_file()
+    if not source.exists():
+        return []
+    entries = _parse_yaml_file(source)
+    if entries is None:
+        return None
+
+    validated: list[dict] = []
+    seen_ids: set[str] = set()
+
+    for i, entry in enumerate(entries):
+        result = _validate_entry(entry, i, require_custom_prefix=True)
+        if result is None:
+            continue
+        sid = result["id"]
+        if sid in seen_ids:
+            log.warning("Custom suggestion entry #%d has duplicate id %r — skipped.", i, sid)
+            continue
+        seen_ids.add(sid)
+        result["source"] = "custom"
+        validated.append(result)
+
+    log.info("Loaded %d custom suggestions from %s.", len(validated), source)
+    return validated
+
+
+def load_suggestions(
+    bundled_yaml_path: Path | None = None,
+    custom_yaml_path: Path | None = None,
+) -> list[dict] | None:
+    """Load and merge bundled and custom suggestions.
+
+    Args:
+        bundled_yaml_path: Override for the bundled YAML path (used in tests).
+        custom_yaml_path: Override for the custom YAML path (used in tests).
+
+    Returns:
+        Merged list of validated suggestion dicts — bundled first, then custom.
+        Returns None if the bundled file cannot be parsed (caller should keep
+        its existing cache rather than replacing with an empty list).
+        A custom file parse error is logged but does not cause None to be returned.
+    """
+    bundled = _load_bundled(bundled_yaml_path)
+    if bundled is None:
+        return None
+
+    custom = _load_custom(custom_yaml_path)
+    if custom is None:
+        log.warning("Custom suggestions file could not be parsed — using bundled only.")
+        custom = []
+
+    bundled_ids = {s["id"] for s in bundled}
+    merged = list(bundled)
+    for s in custom:
+        if s["id"] in bundled_ids:
+            log.warning(
+                "Custom suggestion %r has the same id as a bundled suggestion — skipped.",
+                s["id"],
+            )
+        else:
+            merged.append(s)
+
+    return merged

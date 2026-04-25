@@ -1,0 +1,66 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Claude Lens — Custom Suggestions
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Add your own suggestions here. Claude Lens loads this file at startup
+# alongside the built-in suggestions — restart the sidecar to pick up changes.
+#
+# REQUIREMENTS
+# ────────────
+# Every custom suggestion MUST have:
+#
+#   • id prefixed with  custom_     e.g.  id: custom_testing001
+#   • category prefixed with  custom_   e.g.  category: custom_testing
+#
+# These prefixes guarantee your suggestions never collide with built-in IDs
+# and allow the app to display the source of each suggestion correctly.
+# Entries that do not follow this rule are skipped at load time. Run
+#   python sidecar/validate_suggestions.py
+# to check this file and see any errors before restarting the app.
+#
+# SCHEMA
+# ──────
+# id                  Unique identifier. Must start with  custom_.
+# category            Groups the suggestion in the UI. Must start with  custom_.
+#                     You can invent any category name (e.g. custom_workflows).
+# title               Short label shown on the card. Max 100 characters.
+# description         2–4 sentences shown when the card is expanded.
+#                     Explain what Claude will do and why it is valuable.
+# prompt              The full prompt passed to Claude.
+#                     Use {{project}} where the active project name should be
+#                     substituted. Prompts degrade gracefully if {{project}}
+#                     resolves to an empty string.
+# trigger             When this suggestion is eligible. One of:
+#                       always              — eligible any time during working hours
+#                       low_utilization_eow — eligible when weekly usage is below
+#                                             50 % with ≤ 48 hours to the reset
+#                       post_reset          — eligible for ~4 hours after a weekly
+#                                             quota reset is detected
+# show_every_n_days   Minimum days between showings (integer ≥ 1).
+# actions             Ordered list. First item is the primary action button.
+#                       copy_prompt   — copies the resolved prompt to clipboard
+#                       open_cowork   — copies prompt and brings Cowork to front
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version: "1.0"
+suggestions: []
+
+# ── Example (remove the leading # to enable) ─────────────────────────────────
+#
+#  - id: custom_productivity001
+#    category: custom_productivity
+#    title: "Summarise open pull requests"
+#    description: >
+#      Asks Claude to list open PRs in the current project and give a one-line
+#      summary of each, so you can quickly triage what needs attention.
+#      Flags any PRs that appear stale or have unresolved review comments.
+#    prompt: >
+#      List all open pull requests in {{project}} and give a one-line plain-
+#      English summary of what each one changes. Flag any that appear stale
+#      (no activity in 7+ days) or that have unresolved review comments.
+#    trigger: always
+#    show_every_n_days: 3
+#    actions:
+#      - copy_prompt
+#      - open_cowork

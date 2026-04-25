@@ -73,7 +73,16 @@ claude-lens reads `~/.claudelens/config.json` on startup. The file is optional �
 
 ### Add your own suggestions
 
-Suggestion cards are defined in [`sidecar/data/suggestions.yaml`](sidecar/data/suggestions.yaml). The schema and contributing instructions are documented at the top of that file. To add your own cards, follow the schema, run `python sidecar/validate_suggestions.py` locally to check them, then restart the sidecar.
+On first launch the sidecar creates `~/.claudelens/custom_suggestions.yaml` from a commented template. Add your cards there — the app loads it alongside the built-in suggestions on every restart without touching your edits.
+
+Every custom entry must have its `id` and `category` prefixed with `custom_` (e.g. `id: custom_productivity001`, `category: custom_productivity`). This keeps your suggestions distinct from built-in ones and lets the UI show their source. Run the validator to check before restarting:
+
+```bash
+python sidecar/validate_suggestions.py          # checks ~/.claudelens/custom_suggestions.yaml
+python sidecar/validate_suggestions.py path/to/file.yaml   # or a specific file
+```
+
+To contribute a built-in suggestion instead, edit [`sidecar/data/suggestions.yaml`](sidecar/data/suggestions.yaml) — the schema and contributor notes are at the top of that file.
 
 ## Status
 

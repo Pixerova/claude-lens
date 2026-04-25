@@ -30,7 +30,7 @@ from conftest import make_session, make_snapshot
 import db
 import trigger_evaluator
 import suggestion_engine as engine
-from suggestions_loader import load_suggestions
+from suggestions_loader import load_suggestions, _load_bundled, _load_custom
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -491,13 +491,20 @@ class TestDbSuggestionWriters:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestSuggestionsLoader:
-    def _write_yaml(self, tmp_path, content: str) -> Path:
+    def _write_bundled(self, tmp_path, content: str) -> Path:
         p = tmp_path / "suggestions.yaml"
         p.write_text(textwrap.dedent(content))
         return p
 
-    def test_loads_valid_entry(self, tmp_path):
-        p = self._write_yaml(tmp_path, """
+    def _write_custom(self, tmp_path, content: str) -> Path:
+        p = tmp_path / "custom_suggestions.yaml"
+        p.write_text(textwrap.dedent(content))
+        return p
+
+    # ── bundled loading ───────────────────────────────────────────────────────
+
+    def test_loads_valid_bundled_entry(self, tmp_path):
+        p = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
               - id: testing001
@@ -510,13 +517,29 @@ class TestSuggestionsLoader:
                 actions:
                   - copy_prompt
         """)
-        results = load_suggestions(user_yaml_path=p)
+        results = load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent"))
         assert len(results) == 1
         assert results[0]["id"] == "testing001"
         assert results[0]["trigger"] == "always"
 
+    def test_bundled_source_field_injected(self, tmp_path):
+        p = self._write_bundled(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: testing001
+                category: testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        results = load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent"))
+        assert results[0]["source"] == "bundled"
+
     def test_list_trigger_normalised_to_scalar(self, tmp_path):
-        p = self._write_yaml(tmp_path, """
+        p = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
               - id: s1
@@ -529,11 +552,11 @@ class TestSuggestionsLoader:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        results = load_suggestions(user_yaml_path=p)
+        results = load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent"))
         assert results[0]["trigger"] == "always"
 
     def test_skips_invalid_category(self, tmp_path):
-        p = self._write_yaml(tmp_path, """
+        p = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
               - id: s1
@@ -545,10 +568,10 @@ class TestSuggestionsLoader:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        assert load_suggestions(user_yaml_path=p) == []
+        assert load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent")) == []
 
     def test_skips_invalid_trigger(self, tmp_path):
-        p = self._write_yaml(tmp_path, """
+        p = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
               - id: s1
@@ -560,10 +583,10 @@ class TestSuggestionsLoader:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        assert load_suggestions(user_yaml_path=p) == []
+        assert load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent")) == []
 
     def test_skips_missing_required_fields(self, tmp_path):
-        p = self._write_yaml(tmp_path, """
+        p = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
               - id: s1
@@ -571,10 +594,10 @@ class TestSuggestionsLoader:
                 title: T
                 # missing description, prompt, trigger, show_every_n_days, actions
         """)
-        assert load_suggestions(user_yaml_path=p) == []
+        assert load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent")) == []
 
     def test_skips_duplicate_ids(self, tmp_path):
-        p = self._write_yaml(tmp_path, """
+        p = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
               - id: dup
@@ -594,11 +617,11 @@ class TestSuggestionsLoader:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        results = load_suggestions(user_yaml_path=p)
+        results = load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent"))
         assert len(results) == 1
 
     def test_valid_and_invalid_mixed(self, tmp_path):
-        p = self._write_yaml(tmp_path, """
+        p = self._write_bundled(tmp_path, """
             version: "1.0"
             suggestions:
               - id: good
@@ -618,30 +641,215 @@ class TestSuggestionsLoader:
                 show_every_n_days: 7
                 actions: [copy_prompt]
         """)
-        results = load_suggestions(user_yaml_path=p)
+        results = load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent"))
         assert len(results) == 1
         assert results[0]["id"] == "good"
 
     def test_empty_suggestions_list(self, tmp_path):
-        p = self._write_yaml(tmp_path, "version: '1.0'\nsuggestions: []\n")
-        assert load_suggestions(user_yaml_path=p) == []
+        p = self._write_bundled(tmp_path, "version: '1.0'\nsuggestions: []\n")
+        assert load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent")) == []
 
     def test_returns_none_on_invalid_yaml(self, tmp_path):
-        """A YAML syntax error returns None so the caller keeps its existing cache."""
+        """A bundled YAML parse error returns None so the caller keeps its existing cache."""
         p = tmp_path / "suggestions.yaml"
         p.write_text("key: [unclosed bracket\n  - bad\n")
-        assert load_suggestions(user_yaml_path=p) is None
+        assert load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent")) is None
 
-    def test_loads_bundled_yaml(self):
+    def test_loads_real_bundled_yaml(self):
         """The bundled sidecar/data/suggestions.yaml should parse without errors."""
-        results = load_suggestions(
-            user_yaml_path=Path(__file__).parent.parent / "data" / "suggestions.yaml"
-        )
+        bundled = Path(__file__).parent.parent / "data" / "suggestions.yaml"
+        results = load_suggestions(bundled_yaml_path=bundled, custom_yaml_path=Path("/nonexistent"))
         assert len(results) > 0
         for s in results:
             assert "id" in s
             assert "trigger" in s
             assert s["trigger"] in {"always", "low_utilization_eow", "post_reset"}
+            assert s["source"] == "bundled"
+
+    def test_bundled_rejects_custom_prefix_id(self, tmp_path):
+        p = self._write_bundled(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: custom_testing001
+                category: testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        assert load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent")) == []
+
+    def test_bundled_rejects_custom_prefix_category(self, tmp_path):
+        p = self._write_bundled(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: testing001
+                category: custom_testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        assert load_suggestions(bundled_yaml_path=p, custom_yaml_path=Path("/nonexistent")) == []
+
+    # ── custom loading ────────────────────────────────────────────────────────
+
+    def test_loads_valid_custom_entry(self, tmp_path):
+        p = self._write_custom(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: custom_testing001
+                category: custom_testing
+                title: "My custom suggestion"
+                description: "Does something useful."
+                prompt: "Do the thing in {{project}}."
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        results = _load_custom(p)
+        assert len(results) == 1
+        assert results[0]["id"] == "custom_testing001"
+        assert results[0]["source"] == "custom"
+
+    def test_custom_source_field_injected(self, tmp_path):
+        p = self._write_custom(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: custom_s001
+                category: custom_testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        results = _load_custom(p)
+        assert results[0]["source"] == "custom"
+
+    def test_custom_rejects_missing_id_prefix(self, tmp_path):
+        p = self._write_custom(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: testing001
+                category: custom_testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        assert _load_custom(p) == []
+
+    def test_custom_rejects_missing_category_prefix(self, tmp_path):
+        p = self._write_custom(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: custom_s001
+                category: testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        assert _load_custom(p) == []
+
+    # ── merge behaviour ───────────────────────────────────────────────────────
+
+    def test_merge_bundled_and_custom(self, tmp_path):
+        bundled = self._write_bundled(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: testing001
+                category: testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        custom = self._write_custom(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: custom_testing001
+                category: custom_testing
+                title: CT
+                description: CD
+                prompt: CP
+                trigger: always
+                show_every_n_days: 3
+                actions: [copy_prompt]
+        """)
+        results = load_suggestions(bundled_yaml_path=bundled, custom_yaml_path=custom)
+        assert len(results) == 2
+        ids = [s["id"] for s in results]
+        assert "testing001" in ids
+        assert "custom_testing001" in ids
+        # bundled comes first
+        assert results[0]["id"] == "testing001"
+
+    def test_custom_without_prefix_is_dropped_by_load_custom(self, tmp_path):
+        bundled = self._write_bundled(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: testing001
+                category: testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        custom_p = tmp_path / "custom_suggestions.yaml"
+        custom_p.write_text(textwrap.dedent("""
+            version: "1.0"
+            suggestions:
+              - id: testing001
+                category: custom_testing
+                title: CT
+                description: CD
+                prompt: CP
+                trigger: always
+                show_every_n_days: 3
+                actions: [copy_prompt]
+        """))
+        # The custom entry lacks the custom_ id prefix so _load_custom rejects it
+        # at the require_custom_prefix validation step — never reaches the merge.
+        # (The merge-level collision guard in load_suggestions is belt-and-suspenders:
+        # custom_ prefix rules make a true id collision structurally impossible.)
+        results = load_suggestions(bundled_yaml_path=bundled, custom_yaml_path=custom_p)
+        assert len(results) == 1
+        assert results[0]["source"] == "bundled"
+
+    def test_custom_parse_error_falls_back_to_bundled_only(self, tmp_path):
+        bundled = self._write_bundled(tmp_path, """
+            version: "1.0"
+            suggestions:
+              - id: testing001
+                category: testing
+                title: T
+                description: D
+                prompt: P
+                trigger: always
+                show_every_n_days: 7
+                actions: [copy_prompt]
+        """)
+        bad_custom = tmp_path / "custom_suggestions.yaml"
+        bad_custom.write_text("key: [unclosed bracket\n  - bad\n")
+        results = load_suggestions(bundled_yaml_path=bundled, custom_yaml_path=bad_custom)
+        assert results is not None
+        assert len(results) == 1
+        assert results[0]["id"] == "testing001"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -678,7 +886,10 @@ def _suggestions_client(weekly_pct: float = 0.30, extra_patches=None):
         patch("main.start_watchers", return_value=MagicMock()),
         patch("main.UsagePoller", return_value=poller),
         patch("main.load_suggestions",
-              side_effect=lambda: load_suggestions(user_yaml_path=_BUNDLED_YAML)),
+              side_effect=lambda: load_suggestions(
+                  bundled_yaml_path=_BUNDLED_YAML,
+                  custom_yaml_path=Path("/nonexistent"),
+              )),
         *(extra_patches or []),
     ]
     with ExitStack() as stack:
