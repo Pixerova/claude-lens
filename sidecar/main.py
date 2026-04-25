@@ -607,6 +607,12 @@ def suggestion_snoozed(suggestion_id: str, body: SnoozeRequest):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+class _SuppressHealthOptions(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return 'OPTIONS /health' not in record.getMessage()
+
+
 if __name__ == "__main__":
     import uvicorn
+    logging.getLogger("uvicorn.access").addFilter(_SuppressHealthOptions())
     uvicorn.run(app, host="127.0.0.1", port=8765, reload=False)
