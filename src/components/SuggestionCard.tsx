@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Command } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 import { api, Suggestion } from "../lib/api";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -14,9 +14,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const TRIGGER_LABELS: Record<string, string> = {
-  low_utilization_eow: "Quota running out",
-  post_reset:          "After reset",
-  always:              "Always on",
+  low_utilization_eow: "Use your quota this week",
+  post_reset:          "After quota reset",
+  always:              "Anytime",
 };
 
 function tomorrowAt9am(): string {
@@ -111,9 +111,9 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
     await navigator.clipboard.writeText(suggestion.prompt);
     api.markSuggestionActedOn(suggestion.id).catch(() => {});
     try {
-      await Command.create("open", ["-a", "Claude"]).execute();
+      await invoke("open_claude_app");
     } catch {
-      // Prompt is on clipboard; Claude app may need shell execute capability
+      // Prompt is on clipboard; user can paste manually if app launch fails
     }
     setOpenConfirmed(true);
     setTimeout(() => setOpenConfirmed(false), 2000);
@@ -248,7 +248,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 onMouseEnter={() => setOpenHovered(true)}
                 onMouseLeave={() => setOpenHovered(false)}
               >
-                {openConfirmed ? "✓ Opened" : "Open in Claude"}
+                {openConfirmed ? "✓ Opened" : "Open Cowork"}
               </button>
             )}
 
