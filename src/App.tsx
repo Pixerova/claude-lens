@@ -164,7 +164,6 @@ export default function App() {
 
   const {
     usage,
-    level,
     isLoading: usageLoading,
     error: usageError,
     authError,
@@ -203,13 +202,13 @@ export default function App() {
     const authBannerHeight = authError ? AUTH_BANNER_HEIGHT_PX : 0;
     let height: number;
     if (usageError) {
-      height = 210; // header (~38) + ErrorPanel (~172)
+      height = 229; // header (~56) + ErrorPanel (~173)
     } else if (expanded) {
-      height = 660 + authBannerHeight;
+      height = 679 + authBannerHeight;
     } else if (isSleeping || usage?.isStale) {
-      height = 296 + authBannerHeight;
+      height = 315 + authBannerHeight;
     } else {
-      height = 264 + authBannerHeight;
+      height = 283 + authBannerHeight;
     }
     win.setSize(new LogicalSize(340, height)).catch(() => {});
   }, [expanded, isSleeping, usage?.isStale, usageError, authError]);
@@ -245,15 +244,6 @@ export default function App() {
     return chartData.map(pt => ({ ...pt, value: (pt.value / total) * 100 }));
   }, [chartData]);
 
-  // Logo gradient shifts with the overall warning level
-  const logoGradient: Record<typeof level, string> = {
-    normal: "from-[#00c6ff] to-[#0072ff]",
-    amber:  "from-[#f7971e] to-[#ffd200]",
-    danger: "from-[#ff416c] to-[#ff4b2b]",
-  };
-  const logoBg = (usageLoading && !usage)
-    ? "bg-[#222] border border-[#333]"
-    : `bg-gradient-to-br ${logoGradient[level]}`;
 
   return (
     <div className="min-h-screen flex items-start justify-center p-2 bg-transparent">
@@ -264,9 +254,7 @@ export default function App() {
           onMouseDown={handleDragStart}
           className="flex items-center gap-[7px] px-[11px] py-[9px] border-b border-white/[0.07] cursor-grab active:cursor-grabbing select-none"
         >
-          <div className={`w-[19px] h-[19px] rounded-full flex items-center justify-center shrink-0 ${logoBg}`}>
-            <span className="font-mono text-[7px] font-bold text-white leading-none">CL</span>
-          </div>
+          <img src="/app-icon.png" width={38} height={38} className="shrink-0 rounded-[8px]" alt="" />
           <span className="text-[12px] font-semibold text-white flex-1 tracking-[-0.01em]">
             claude-lens
           </span>
