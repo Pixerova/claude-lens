@@ -92,6 +92,26 @@ describe("useUsage polling chain", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("keeps polling after a Sidecar 401 on auto-poll", async () => {
+    vi.spyOn(apiModule.api, "getUsageCurrent")
+      .mockRejectedValueOnce(new Error("Sidecar 401: Unauthorized"))
+      .mockResolvedValue(freshSnapshot);
+    // getHealth is only reachable after getUsageCurrent succeeds — applies to call #2.
+    vi.spyOn(apiModule.api, "getHealth").mockResolvedValue(healthOk);
+
+    const { result } = renderHook(() => useUsage());
+    await flush();
+
+    // Auth error set, generic error absent.
+    expect(result.current.authError).toBe(true);
+    expect(result.current.error).toBeNull();
+
+    // Chain still alive — second poll recovers.
+    await tick(5 * 60 * 1000 + 100);
+    expect(result.current.authError).toBe(false);
+    expect(result.current.usage?.isStale).toBe(false);
+  });
+
   it("keeps polling after consecutive failures", async () => {
     const getUsageCurrent = vi
       .spyOn(apiModule.api, "getUsageCurrent")
