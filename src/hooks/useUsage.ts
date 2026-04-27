@@ -21,6 +21,7 @@ export interface UseUsageResult {
   isLoading: boolean;
   error: string | null;
   authError: boolean;
+  isSleeping: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -49,10 +50,11 @@ function getPollIntervalMs(usage: UsageCurrent | null): number {
 }
 
 export function useUsage(): UseUsageResult {
-  const [usage, setUsage]       = useState<UsageCurrent | null>(null);
-  const [isLoading, setLoading] = useState(true);
-  const [error, setError]       = useState<string | null>(null);
+  const [usage, setUsage]         = useState<UsageCurrent | null>(null);
+  const [isLoading, setLoading]   = useState(true);
+  const [error, setError]         = useState<string | null>(null);
   const [authError, setAuthError] = useState(false);
+  const [isSleeping, setIsSleeping] = useState(false);
   const timerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Server-reported poll interval (ms); null until first successful fetch.
   const serverIntervalMsRef     = useRef<number | null>(null);
@@ -72,6 +74,7 @@ export function useUsage(): UseUsageResult {
           serverIntervalMsRef.current = health.pollIntervalSec * 1000;
         }
         setAuthError(health.authError ?? false);
+        setIsSleeping(health.isSleeping ?? false);
       } catch {
         // Health check failure is non-fatal; keep the current authError value
         // rather than clearing it, to avoid hiding a real auth problem.
@@ -110,7 +113,7 @@ export function useUsage(): UseUsageResult {
     await fetchUsage(true);
   }, [fetchUsage]);
 
-  return { usage, level: getLevel(usage), isLoading, error, authError, refresh };
+  return { usage, level: getLevel(usage), isLoading, error, authError, isSleeping, refresh };
 }
 
 // ── Formatting helpers (exported for use in components) ───────────────────────
