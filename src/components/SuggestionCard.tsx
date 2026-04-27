@@ -50,6 +50,16 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
   const [dismissPermHovered, setDismissPermHovered] = useState(false);
   const [cancelHovered, setCancelHovered] = useState(false);
 
+  const expandedBodyRef = useRef<HTMLDivElement>(null);
+
+  // Scroll expanded content into view so the last card in the list isn't
+  // clipped by the overflow-y-auto scroll container.
+  useEffect(() => {
+    if (isExpanded && expandedBodyRef.current) {
+      expandedBodyRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [isExpanded]);
+
   // Persists for the lifetime of this component instance; guards against
   // recording shown_at more than once per card mount even when the card
   // collapses and re-expands or when an action fires before the timer.
@@ -191,7 +201,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
       {/* Expanded body */}
       {isExpanded && (
-        <div className="px-[14px] pb-[12px]">
+        <div ref={expandedBodyRef} className="px-[14px] pb-[12px]">
           {/* Description */}
           <p
             className="font-mono"

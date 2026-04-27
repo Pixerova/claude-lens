@@ -377,7 +377,7 @@ def get_sessions_for_chart(days: int = 7) -> list[sqlite3.Row]:
     with _get_conn() as conn:
         return conn.execute(
             """
-            SELECT DATE(started_at) AS day,
+            SELECT DATE(started_at, 'localtime') AS day,
                    source,
                    SUM(cost_usd)   AS cost_usd
             FROM session_summaries
