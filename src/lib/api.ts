@@ -71,6 +71,7 @@ export interface Health {
   isStale: boolean;
   stalenessSeconds: number | null;
   isSleeping: boolean;
+  activeUntil: string | null;
   db: {
     snapshot_count: number;
     session_count: number;

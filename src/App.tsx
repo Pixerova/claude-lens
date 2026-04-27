@@ -185,7 +185,7 @@ export default function App() {
   }, [refreshUsage, refreshSessions]);
 
   const handleClose = useCallback(() => {
-    getCurrentWindow().hide().catch(() => {});
+    getCurrentWindow().hide().catch((e) => console.error("[claude-lens] hide failed", e));
   }, []);
 
   // Reset tray when widget collapses
@@ -203,6 +203,8 @@ export default function App() {
     let height: number;
     if (usageError) {
       height = 229; // header (~56) + ErrorPanel (~173)
+    } else if (expanded && showTray) {
+      height = 660 + authBannerHeight; // tray view: no sleep indicator
     } else if (expanded) {
       height = 679 + authBannerHeight;
     } else if (isSleeping || usage?.isStale) {
@@ -211,7 +213,7 @@ export default function App() {
       height = 283 + authBannerHeight;
     }
     win.setSize(new LogicalSize(340, height)).catch(() => {});
-  }, [expanded, isSleeping, usage?.isStale, usageError, authError]);
+  }, [expanded, showTray, isSleeping, usage?.isStale, usageError, authError]);
 
   // Drag from header
   const handleDragStart = useCallback((e: React.MouseEvent) => {

@@ -117,7 +117,7 @@ def _reset_if_schema_changed(conn: sqlite3.Connection) -> None:
     dropped so init_db() can recreate them from the current SCHEMA.
 
     This replaces the ALTER TABLE migration approach during development.
-    TODO(M6): swap this out for proper ALTER TABLE migrations before shipping to users.
+    TODO: swap this out for proper ALTER TABLE migrations before shipping to users.
     """
     current = _schema_hash()
     hash_path = _schema_hash_path()
@@ -377,6 +377,8 @@ def get_sessions_for_chart(days: int = 7) -> list[sqlite3.Row]:
     with _get_conn() as conn:
         return conn.execute(
             """
+            -- cutoff is UTC-based; sessions at the very start of the window may be
+            -- bucketed by 'localtime' into a day not in the frontend scaffold and skipped.
             SELECT DATE(started_at, 'localtime') AS day,
                    source,
                    SUM(cost_usd)   AS cost_usd

@@ -9,29 +9,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type UsageCurrent } from "../lib/api";
 
-// Warning thresholds — should match config.json defaults
-const AMBER_PCT = 0.80;
-const RED_PCT   = 0.90;
-
-export type UsageLevel = "normal" | "amber" | "danger";
-
 export interface UseUsageResult {
   usage: UsageCurrent | null;
-  level: UsageLevel;
   isLoading: boolean;
   error: string | null;
   authError: boolean;
   isSleeping: boolean;
   refresh: () => Promise<void>;
-}
-
-/** Derive the visual warning level from utilisation. */
-function getLevel(usage: UsageCurrent | null): UsageLevel {
-  if (!usage) return "normal";
-  const util = Math.max(usage.sessionPct, usage.weeklyPct);
-  if (util >= RED_PCT)   return "danger";
-  if (util >= AMBER_PCT) return "amber";
-  return "normal";
 }
 
 /**
@@ -113,7 +97,7 @@ export function useUsage(): UseUsageResult {
     await fetchUsage(true);
   }, [fetchUsage]);
 
-  return { usage, level: getLevel(usage), isLoading, error, authError, isSleeping, refresh };
+  return { usage, isLoading, error, authError, isSleeping, refresh };
 }
 
 // ── Formatting helpers (exported for use in components) ───────────────────────

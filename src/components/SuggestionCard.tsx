@@ -44,7 +44,6 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
   const [openConfirmed, setOpenConfirmed] = useState(false);
   const [openHovered, setOpenHovered] = useState(false);
   const [copyHovered, setCopyHovered] = useState(false);
-  const [dismissHovered, setDismissHovered] = useState(false);
   const [snooze1hHovered, setSnooze1hHovered] = useState(false);
   const [snoozeTomorrowHovered, setSnoozeTomorrowHovered] = useState(false);
   const [dismissPermHovered, setDismissPermHovered] = useState(false);
@@ -285,18 +284,16 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
             <button
               onClick={() => setShowDismissSheet(true)}
-              className="font-mono shrink-0 transition-colors"
+              className="font-mono shrink-0"
               style={{
                 fontSize: "13px",
                 padding: "5px 8px",
                 borderRadius: "3px",
                 cursor: "pointer",
                 background: "transparent",
-                color: dismissHovered ? "#fff" : "#fff",
-                border: dismissHovered ? "1px solid #666" : "1px solid #222",
+                color: "#fff",
+                border: "1px solid #222",
               }}
-              onMouseEnter={() => setDismissHovered(true)}
-              onMouseLeave={() => setDismissHovered(false)}
             >
               ×
             </button>
