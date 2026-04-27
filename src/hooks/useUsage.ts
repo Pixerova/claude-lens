@@ -39,6 +39,10 @@ export function useUsage(): UseUsageResult {
   const [error, setError]         = useState<string | null>(null);
   const [authError, setAuthError] = useState(false);
   const [isSleeping, setIsSleeping] = useState(false);
+  // Incremented after every fetch attempt (success or failure) to ensure the
+  // timer effect always reschedules — without this, a failed fetch leaves usage
+  // unchanged and the effect never re-runs, permanently breaking the poll chain.
+  const [pollSchedule, setPollSchedule] = useState(0);
   const timerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Server-reported poll interval (ms); null until first successful fetch.
   const serverIntervalMsRef     = useRef<number | null>(null);
@@ -76,11 +80,18 @@ export function useUsage(): UseUsageResult {
       }
     } finally {
       setLoading(false);
+      setPollSchedule(n => n + 1);
     }
   }, []);
 
   // Schedule next poll. Uses server interval once available, otherwise
   // falls back to the local threshold table as a pre-fetch default.
+  // React 18 auto-batching coalesces concurrent state updates (e.g. setUsage +
+  // setPollSchedule on a successful fetch) into a single re-render, so this
+  // effect fires exactly once per fetch attempt. Under React 17 or in unbatched
+  // contexts, a successful fetch would trigger two effect runs and create a
+  // double-timer bug.
+  // TODO: consolidate fetchUsage state into a useReducer before any React 17 backport.
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     const interval = serverIntervalMsRef.current ?? getPollIntervalMs(usage);
@@ -88,7 +99,7 @@ export function useUsage(): UseUsageResult {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [usage, fetchUsage]);
+  }, [usage, fetchUsage, pollSchedule]);
 
   // Initial fetch
   useEffect(() => {
