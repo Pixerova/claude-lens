@@ -26,7 +26,7 @@ struct SidecarHandle(Mutex<Option<CommandChild>>);
 fn open_claude_app() -> Result<(), String> {
     std::process::Command::new("open")
         .args(["-a", "Claude"])
-        .spawn()
+        .output()
         .map(|_| ())
         .map_err(|e| e.to_string())
 }

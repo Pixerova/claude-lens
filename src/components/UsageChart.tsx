@@ -78,7 +78,7 @@ export const UsageChart: React.FC<UsageChartProps> = ({ data, unit, emptyLabel }
     return days.map((iso) => map.get(iso)!);
   }, [data]);
 
-  if (chartData.length === 0) {
+  if (chartData.every(d => d.code === 0 && d.cowork === 0)) {
     return (
       <p className="font-mono text-center text-[10px] text-white/30 py-4">
         {emptyLabel ?? "No data yet."}

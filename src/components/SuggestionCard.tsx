@@ -51,10 +51,10 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
   const expandedBodyRef = useRef<HTMLDivElement>(null);
 
-  // Scroll expanded content into view so the last card in the list isn't
-  // clipped by the overflow-y-auto scroll container.
+  const hasScrolled = useRef(false);
   useEffect(() => {
-    if (isExpanded && expandedBodyRef.current) {
+    if (isExpanded && expandedBodyRef.current && !hasScrolled.current) {
+      hasScrolled.current = true;
       expandedBodyRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [isExpanded]);
@@ -163,9 +163,8 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
             {suggestion.category.replace(/_/g, " ")}
           </span>
           <span
-            className="transition-transform duration-200 flex items-center justify-center w-[23px] h-[23px]"
+            className="transition-transform duration-200 inline-flex items-center justify-center w-[23px] h-[23px]"
             style={{
-              display: "inline-flex",
               color: "#666",
               transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
             }}

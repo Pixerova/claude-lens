@@ -62,6 +62,9 @@ export function useUsage(): UseUsageResult {
       } catch {
         // Health check failure is non-fatal; keep the current authError value
         // rather than clearing it, to avoid hiding a real auth problem.
+        // Reset isSleeping — we can't confirm sleep state when health is
+        // unreachable, so default to awake to avoid incorrectly dimming tiles.
+        setIsSleeping(false);
       }
     } catch (err) {
       // A 401 from /usage/refresh means auth failure, not a sidecar outage.

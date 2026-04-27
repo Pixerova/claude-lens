@@ -290,7 +290,8 @@ export default function App() {
         {/* ── Collapsed view ───────────────────────────────────────────────── */}
         {!usageError && !expanded && (
           <>
-            {/* Stat tiles — top row */}
+            {/* Stat tiles — top row. Sleep filter intentionally excludes the
+                suggestion button below: suggestions stay vivid as active CTAs. */}
             <div
               className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]"
               style={isSleeping ? { filter: "saturate(0.2) brightness(0.75)" } : undefined}
