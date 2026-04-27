@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Command } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 import { api, Suggestion } from "../lib/api";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -14,9 +14,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const TRIGGER_LABELS: Record<string, string> = {
-  low_utilization_eow: "Quota running out",
-  post_reset:          "After reset",
-  always:              "Always on",
+  low_utilization_eow: "Use your quota this week",
+  post_reset:          "After quota reset",
+  always:              "Anytime",
 };
 
 function tomorrowAt9am(): string {
@@ -44,11 +44,20 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
   const [openConfirmed, setOpenConfirmed] = useState(false);
   const [openHovered, setOpenHovered] = useState(false);
   const [copyHovered, setCopyHovered] = useState(false);
-  const [dismissHovered, setDismissHovered] = useState(false);
   const [snooze1hHovered, setSnooze1hHovered] = useState(false);
   const [snoozeTomorrowHovered, setSnoozeTomorrowHovered] = useState(false);
   const [dismissPermHovered, setDismissPermHovered] = useState(false);
   const [cancelHovered, setCancelHovered] = useState(false);
+
+  const expandedBodyRef = useRef<HTMLDivElement>(null);
+
+  const hasScrolled = useRef(false);
+  useEffect(() => {
+    if (isExpanded && expandedBodyRef.current && !hasScrolled.current) {
+      hasScrolled.current = true;
+      expandedBodyRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [isExpanded]);
 
   // Persists for the lifetime of this component instance; guards against
   // recording shown_at more than once per card mount even when the card
@@ -111,9 +120,9 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
     await navigator.clipboard.writeText(suggestion.prompt);
     api.markSuggestionActedOn(suggestion.id).catch(() => {});
     try {
-      await Command.create("open", ["-a", "Claude"]).execute();
+      await invoke("open_claude_app");
     } catch {
-      // Prompt is on clipboard; Claude app may need shell execute capability
+      // Prompt is on clipboard; user can paste manually if app launch fails
     }
     setOpenConfirmed(true);
     setTimeout(() => setOpenConfirmed(false), 2000);
@@ -154,15 +163,15 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
             {suggestion.category.replace(/_/g, " ")}
           </span>
           <span
-            className="transition-transform duration-200"
+            className="transition-transform duration-200 inline-flex items-center justify-center w-[23px] h-[23px]"
             style={{
-              fontSize: "13px",
-              color: "#555",
-              display: "inline-block",
+              color: "#666",
               transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
             }}
           >
-            ▾
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
           </span>
         </div>
 
@@ -191,7 +200,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
       {/* Expanded body */}
       {isExpanded && (
-        <div className="px-[14px] pb-[12px]">
+        <div ref={expandedBodyRef} className="px-[14px] pb-[12px]">
           {/* Description */}
           <p
             className="font-mono"
@@ -248,7 +257,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 onMouseEnter={() => setOpenHovered(true)}
                 onMouseLeave={() => setOpenHovered(false)}
               >
-                {openConfirmed ? "✓ Opened" : "Open in Claude"}
+                {openConfirmed ? "✓ Opened" : "Open Cowork"}
               </button>
             )}
 
@@ -274,18 +283,16 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
             <button
               onClick={() => setShowDismissSheet(true)}
-              className="font-mono shrink-0 transition-colors"
+              className="font-mono shrink-0"
               style={{
                 fontSize: "13px",
                 padding: "5px 8px",
                 borderRadius: "3px",
                 cursor: "pointer",
                 background: "transparent",
-                color: dismissHovered ? "#aaa" : "#555",
-                border: dismissHovered ? "1px solid #666" : "1px solid #222",
+                color: "#fff",
+                border: "1px solid #222",
               }}
-              onMouseEnter={() => setDismissHovered(true)}
-              onMouseLeave={() => setDismissHovered(false)}
             >
               ×
             </button>

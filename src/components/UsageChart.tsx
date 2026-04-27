@@ -49,23 +49,36 @@ function shortDay(isoDay: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short" });
 }
 
+function localIso(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export const UsageChart: React.FC<UsageChartProps> = ({ data, unit, emptyLabel }) => {
   const chartData = useMemo<DayEntry[]>(() => {
-    const map = new Map<string, DayEntry>();
+    // Build a 7-day scaffold in local time so zero-usage days always render.
+    const today = new Date();
+    const days: string[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      days.push(localIso(d));
+    }
+    const map = new Map<string, DayEntry>(
+      days.map((iso) => [iso, { day: shortDay(iso), code: 0, cowork: 0 }])
+    );
     data.forEach((pt) => {
-      if (!map.has(pt.day)) {
-        map.set(pt.day, { day: shortDay(pt.day), code: 0, cowork: 0 });
-      }
-      const entry = map.get(pt.day)!;
+      const entry = map.get(pt.day);
+      if (!entry) return;
       if (pt.source === "code")   entry.code   += pt.value;
       if (pt.source === "cowork") entry.cowork += pt.value;
     });
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, v]) => v);
+    return days.map((iso) => map.get(iso)!);
   }, [data]);
 
-  if (chartData.length === 0) {
+  if (chartData.every(d => d.code === 0 && d.cowork === 0)) {
     return (
       <p className="font-mono text-center text-[10px] text-white/30 py-4">
         {emptyLabel ?? "No data yet."}
@@ -83,10 +96,10 @@ export const UsageChart: React.FC<UsageChartProps> = ({ data, unit, emptyLabel }
 
   return (
     <ResponsiveContainer width="100%" height={56}>
-      <BarChart data={chartData} barSize={12} barCategoryGap="30%">
+      <BarChart data={chartData} barCategoryGap="20%">
         <XAxis
           dataKey="day"
-          tick={{ fill: AXIS_COLOR, fontSize: 8 }}
+          tick={{ fill: AXIS_COLOR, fontSize: 10 }}
           axisLine={false}
           tickLine={false}
         />

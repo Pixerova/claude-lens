@@ -20,6 +20,17 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut}
 
 struct SidecarHandle(Mutex<Option<CommandChild>>);
 
+/// Launch Claude.app via the macOS `open` command. Fire-and-forget.
+/// macOS-only — revisit if cross-platform support is added.
+#[tauri::command]
+fn open_claude_app() -> Result<(), String> {
+    std::process::Command::new("open")
+        .args(["-a", "Claude"])
+        .output()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 // ── Sidecar ───────────────────────────────────────────────────────────────────
 
 fn start_sidecar(app: &AppHandle) {
@@ -77,6 +88,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![open_claude_app])
         .setup(|app| {
             // 1. Start the Python sidecar
             app.manage(SidecarHandle(Mutex::new(None)));

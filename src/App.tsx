@@ -18,6 +18,7 @@ import { useSessions, totalCostUsd } from "./hooks/useSessions";
 import { useSuggestions } from "./hooks/useSuggestions";
 import { UsageTile }        from "./components/UsageTile";
 import { StaleIndicator }   from "./components/StaleIndicator";
+import { SleepIndicator }   from "./components/SleepIndicator";
 import { SessionList }      from "./components/SessionList";
 import { UsageChart }       from "./components/UsageChart";
 import { SuggestionBadge }  from "./components/SuggestionBadge";
@@ -26,21 +27,28 @@ import { SuggestionTray }   from "./components/SuggestionTray";
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
 const IconRefresh = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M13.5 8A5.5 5.5 0 1 1 10 3.07"/>
     <polyline points="10 1 10 4 13 4"/>
   </svg>
 );
 
 const IconChevronDown = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 9l6 6 6-6"/>
   </svg>
 );
 
 const IconChevronUp = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 15l-6-6-6 6"/>
+  </svg>
+);
+
+const IconX = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="3" x2="13" y2="13"/>
+    <line x1="13" y1="3" x2="3" y2="13"/>
   </svg>
 );
 
@@ -64,7 +72,7 @@ const HeaderButton: React.FC<{
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className="w-[19px] h-[19px] flex items-center justify-center rounded text-[#666] hover:text-white hover:bg-white/[0.08] transition-colors disabled:opacity-40 border-none bg-transparent cursor-pointer"
+    className="w-[23px] h-[23px] flex items-center justify-center rounded text-[#666] hover:text-white hover:bg-white/[0.08] transition-colors disabled:opacity-40 border-none bg-transparent cursor-pointer"
   >
     {children}
   </button>
@@ -156,10 +164,10 @@ export default function App() {
 
   const {
     usage,
-    level,
     isLoading: usageLoading,
     error: usageError,
     authError,
+    isSleeping,
     refresh: refreshUsage,
   } = useUsage();
 
@@ -176,6 +184,10 @@ export default function App() {
     await Promise.all([refreshUsage(), refreshSessions()]);
   }, [refreshUsage, refreshSessions]);
 
+  const handleClose = useCallback(() => {
+    getCurrentWindow().hide().catch((e) => console.error("[claude-lens] hide failed", e));
+  }, []);
+
   // Reset tray when widget collapses
   useEffect(() => {
     if (!expanded) setShowTray(false);
@@ -190,16 +202,18 @@ export default function App() {
     const authBannerHeight = authError ? AUTH_BANNER_HEIGHT_PX : 0;
     let height: number;
     if (usageError) {
-      height = 210; // header (~38) + ErrorPanel (~172)
+      height = 229; // header (~56) + ErrorPanel (~173)
+    } else if (expanded && showTray) {
+      height = 660 + authBannerHeight; // tray view: no sleep indicator
     } else if (expanded) {
-      height = 660 + authBannerHeight;
-    } else if (usage?.isStale) {
-      height = 296 + authBannerHeight;
+      height = 679 + authBannerHeight;
+    } else if (isSleeping || usage?.isStale) {
+      height = 315 + authBannerHeight;
     } else {
-      height = 264 + authBannerHeight;
+      height = 283 + authBannerHeight;
     }
     win.setSize(new LogicalSize(340, height)).catch(() => {});
-  }, [expanded, usage?.isStale, usageError, authError]);
+  }, [expanded, showTray, isSleeping, usage?.isStale, usageError, authError]);
 
   // Drag from header
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -232,15 +246,6 @@ export default function App() {
     return chartData.map(pt => ({ ...pt, value: (pt.value / total) * 100 }));
   }, [chartData]);
 
-  // Logo gradient shifts with the overall warning level
-  const logoGradient: Record<typeof level, string> = {
-    normal: "from-[#00c6ff] to-[#0072ff]",
-    amber:  "from-[#f7971e] to-[#ffd200]",
-    danger: "from-[#ff416c] to-[#ff4b2b]",
-  };
-  const logoBg = (usageLoading && !usage)
-    ? "bg-[#222] border border-[#333]"
-    : `bg-gradient-to-br ${logoGradient[level]}`;
 
   return (
     <div className="min-h-screen flex items-start justify-center p-2 bg-transparent">
@@ -251,13 +256,14 @@ export default function App() {
           onMouseDown={handleDragStart}
           className="flex items-center gap-[7px] px-[11px] py-[9px] border-b border-white/[0.07] cursor-grab active:cursor-grabbing select-none"
         >
-          <div className={`w-[19px] h-[19px] rounded-full flex items-center justify-center shrink-0 ${logoBg}`}>
-            <span className="font-mono text-[7px] font-bold text-white leading-none">CL</span>
-          </div>
+          <img src="/app-icon.png" width={38} height={38} className="shrink-0 rounded-[8px]" alt="" />
           <span className="text-[12px] font-semibold text-white flex-1 tracking-[-0.01em]">
             claude-lens
           </span>
-          {usage?.isStale && (
+          {isSleeping && (
+            <div className="w-[7px] h-[7px] rounded-full bg-[#7dd3fc] animate-pulse shrink-0" title="Sleeping" />
+          )}
+          {!isSleeping && usage?.isStale && (
             <div className="w-[7px] h-[7px] rounded-full bg-[#ffd200] animate-pulse shrink-0" title="Data may be stale" />
           )}
           <HeaderButton onClick={handleRefresh} disabled={usageLoading} title="Force refresh">
@@ -265,6 +271,9 @@ export default function App() {
           </HeaderButton>
           <HeaderButton onClick={() => setExpanded(v => !v)} title={expanded ? "Collapse" : "Expand"}>
             {expanded ? <IconChevronUp /> : <IconChevronDown />}
+          </HeaderButton>
+          <HeaderButton onClick={handleClose} title="Hide">
+            <IconX />
           </HeaderButton>
         </div>
 
@@ -281,8 +290,12 @@ export default function App() {
         {/* ── Collapsed view ───────────────────────────────────────────────── */}
         {!usageError && !expanded && (
           <>
-            {/* Stat tiles — top row */}
-            <div className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]">
+            {/* Stat tiles — top row. Sleep filter intentionally excludes the
+                suggestion button below: suggestions stay vivid as active CTAs. */}
+            <div
+              className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]"
+              style={isSleeping ? { filter: "saturate(0.2) brightness(0.75)" } : undefined}
+            >
               {usageLoading && !usage ? (
                 <>
                   {[0, 1].map((i) => (
@@ -363,10 +376,11 @@ export default function App() {
               </button>
             ) : null}
 
-            {/* Stale banner — collapsed */}
-            {usage?.isStale && (
-              <StaleIndicator isStale recordedAt={usage.recordedAt} />
-            )}
+            {/* Sleep / stale banner — collapsed */}
+            {isSleeping
+              ? <SleepIndicator />
+              : usage?.isStale && <StaleIndicator isStale recordedAt={usage.recordedAt} />
+            }
 
             <div className="pb-[9px]" />
           </>
@@ -381,7 +395,10 @@ export default function App() {
         {!usageError && expanded && !showTray && (
           <>
             {/* 1 — Full-size usage tiles */}
-            <div className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]">
+            <div
+              className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]"
+              style={isSleeping ? { filter: "saturate(0.2) brightness(0.75)" } : undefined}
+            >
               {usageLoading && !usage ? (
                 <>
                   <div className="rounded-[9px] min-h-[78px] bg-white/[0.07] animate-pulse" />
@@ -395,10 +412,11 @@ export default function App() {
               ) : null}
             </div>
 
-            {/* Stale banner */}
-            {usage?.isStale && (
-              <StaleIndicator isStale recordedAt={usage.recordedAt} />
-            )}
+            {/* Sleep / stale banner — expanded */}
+            {isSleeping
+              ? <SleepIndicator />
+              : usage?.isStale && <StaleIndicator isStale recordedAt={usage.recordedAt} />
+            }
 
             <Divider />
 

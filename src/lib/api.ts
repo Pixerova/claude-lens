@@ -70,6 +70,8 @@ export interface Health {
   pollIntervalSec: number | null;
   isStale: boolean;
   stalenessSeconds: number | null;
+  isSleeping: boolean;
+  activeUntil: string | null;
   db: {
     snapshot_count: number;
     session_count: number;

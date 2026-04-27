@@ -9,28 +9,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type UsageCurrent } from "../lib/api";
 
-// Warning thresholds — should match config.json defaults
-const AMBER_PCT = 0.80;
-const RED_PCT   = 0.90;
-
-export type UsageLevel = "normal" | "amber" | "danger";
-
 export interface UseUsageResult {
   usage: UsageCurrent | null;
-  level: UsageLevel;
   isLoading: boolean;
   error: string | null;
   authError: boolean;
+  isSleeping: boolean;
   refresh: () => Promise<void>;
-}
-
-/** Derive the visual warning level from utilisation. */
-function getLevel(usage: UsageCurrent | null): UsageLevel {
-  if (!usage) return "normal";
-  const util = Math.max(usage.sessionPct, usage.weeklyPct);
-  if (util >= RED_PCT)   return "danger";
-  if (util >= AMBER_PCT) return "amber";
-  return "normal";
 }
 
 /**
@@ -49,10 +34,11 @@ function getPollIntervalMs(usage: UsageCurrent | null): number {
 }
 
 export function useUsage(): UseUsageResult {
-  const [usage, setUsage]       = useState<UsageCurrent | null>(null);
-  const [isLoading, setLoading] = useState(true);
-  const [error, setError]       = useState<string | null>(null);
+  const [usage, setUsage]         = useState<UsageCurrent | null>(null);
+  const [isLoading, setLoading]   = useState(true);
+  const [error, setError]         = useState<string | null>(null);
   const [authError, setAuthError] = useState(false);
+  const [isSleeping, setIsSleeping] = useState(false);
   const timerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Server-reported poll interval (ms); null until first successful fetch.
   const serverIntervalMsRef     = useRef<number | null>(null);
@@ -72,9 +58,13 @@ export function useUsage(): UseUsageResult {
           serverIntervalMsRef.current = health.pollIntervalSec * 1000;
         }
         setAuthError(health.authError ?? false);
+        setIsSleeping(health.isSleeping ?? false);
       } catch {
         // Health check failure is non-fatal; keep the current authError value
         // rather than clearing it, to avoid hiding a real auth problem.
+        // Reset isSleeping — we can't confirm sleep state when health is
+        // unreachable, so default to awake to avoid incorrectly dimming tiles.
+        setIsSleeping(false);
       }
     } catch (err) {
       // A 401 from /usage/refresh means auth failure, not a sidecar outage.
@@ -110,7 +100,7 @@ export function useUsage(): UseUsageResult {
     await fetchUsage(true);
   }, [fetchUsage]);
 
-  return { usage, level: getLevel(usage), isLoading, error, authError, refresh };
+  return { usage, isLoading, error, authError, isSleeping, refresh };
 }
 
 // ── Formatting helpers (exported for use in components) ───────────────────────
