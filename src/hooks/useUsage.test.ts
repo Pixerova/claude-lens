@@ -69,6 +69,7 @@ describe("useUsage polling chain", () => {
       .mockRejectedValueOnce(NETWORK_ERROR)
       .mockResolvedValue(freshSnapshot);
 
+    // getHealth is only reachable after getUsageCurrent succeeds — applies to call #2.
     vi.spyOn(apiModule.api, "getHealth").mockResolvedValue(healthOk);
 
     const { result } = renderHook(() => useUsage());
@@ -113,6 +114,25 @@ describe("useUsage polling chain", () => {
     // Third poll window — succeeds.
     await tick(5 * 60 * 1000 + 100);
     expect(getUsageCurrent).toHaveBeenCalledTimes(3);
+  });
+
+  it("reschedules automatic polling after a manual refresh", async () => {
+    const getUsageCurrent = vi
+      .spyOn(apiModule.api, "getUsageCurrent")
+      .mockResolvedValue(freshSnapshot);
+    vi.spyOn(apiModule.api, "refreshUsage").mockResolvedValue(freshSnapshot);
+    vi.spyOn(apiModule.api, "getHealth").mockResolvedValue(healthOk);
+
+    const { result } = renderHook(() => useUsage());
+    await flush(); // initial fetch
+
+    await act(async () => { void result.current.refresh(); });
+    await flush(); // refresh settles
+
+    // Advance one full poll window — automatic polling must still fire.
+    await tick(300 * 1000 + 100);
+    // 1 initial + 1 auto-poll after refresh = 2 getUsageCurrent calls total.
+    expect(getUsageCurrent).toHaveBeenCalledTimes(2);
   });
 
   it("clears authError and isStale once sidecar recovers", async () => {

@@ -86,6 +86,11 @@ export function useUsage(): UseUsageResult {
 
   // Schedule next poll. Uses server interval once available, otherwise
   // falls back to the local threshold table as a pre-fetch default.
+  // React 18 auto-batching coalesces concurrent state updates (e.g. setUsage +
+  // setPollSchedule on a successful fetch) into a single re-render, so this
+  // effect fires exactly once per fetch attempt. Under React 17 or in unbatched
+  // contexts, a successful fetch would trigger two effect runs and create a
+  // double-timer bug — consolidate via useReducer before any backport.
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     const interval = serverIntervalMsRef.current ?? getPollIntervalMs(usage);
