@@ -164,15 +164,16 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
             {suggestion.category.replace(/_/g, " ")}
           </span>
           <span
-            className="transition-transform duration-200"
+            className="transition-transform duration-200 flex items-center justify-center w-[23px] h-[23px]"
             style={{
-              fontSize: "13px",
-              color: "#555",
-              display: "inline-block",
+              display: "inline-flex",
+              color: "#666",
               transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
             }}
           >
-            ▾
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
           </span>
         </div>
 
@@ -291,7 +292,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 borderRadius: "3px",
                 cursor: "pointer",
                 background: "transparent",
-                color: dismissHovered ? "#aaa" : "#555",
+                color: dismissHovered ? "#fff" : "#fff",
                 border: dismissHovered ? "1px solid #666" : "1px solid #222",
               }}
               onMouseEnter={() => setDismissHovered(true)}
