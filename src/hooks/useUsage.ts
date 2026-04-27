@@ -39,6 +39,10 @@ export function useUsage(): UseUsageResult {
   const [error, setError]         = useState<string | null>(null);
   const [authError, setAuthError] = useState(false);
   const [isSleeping, setIsSleeping] = useState(false);
+  // Incremented after every fetch attempt (success or failure) to ensure the
+  // timer effect always reschedules — without this, a failed fetch leaves usage
+  // unchanged and the effect never re-runs, permanently breaking the poll chain.
+  const [pollSchedule, setPollSchedule] = useState(0);
   const timerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Server-reported poll interval (ms); null until first successful fetch.
   const serverIntervalMsRef     = useRef<number | null>(null);
@@ -76,6 +80,7 @@ export function useUsage(): UseUsageResult {
       }
     } finally {
       setLoading(false);
+      setPollSchedule(n => n + 1);
     }
   }, []);
 
@@ -88,7 +93,7 @@ export function useUsage(): UseUsageResult {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [usage, fetchUsage]);
+  }, [usage, fetchUsage, pollSchedule]);
 
   // Initial fetch
   useEffect(() => {
