@@ -96,7 +96,6 @@ describe("StaleIndicator", () => {
   it("renders stale banner when isStale is true", () => {
     const { container } = render(<StaleIndicator isStale={true} />);
     expect(container.textContent?.toLowerCase()).toContain("stale");
-    expect(container.innerHTML).not.toBe("");
   });
 
   it("renders nothing when isStale is false", () => {
@@ -108,7 +107,6 @@ describe("StaleIndicator", () => {
     const { container } = render(
       <StaleIndicator isStale={false} error="Sidecar unreachable" />
     );
-    expect(container.innerHTML).not.toBe("");
     expect(container.textContent?.toLowerCase()).toContain("unreachable");
   });
 });
@@ -118,7 +116,6 @@ describe("StaleIndicator", () => {
 describe("SleepIndicator", () => {
   it("renders the sleep banner", () => {
     const { container } = render(<SleepIndicator />);
-    expect(container.innerHTML).not.toBe("");
     expect(container.textContent?.toLowerCase()).toContain("sleep");
   });
 });

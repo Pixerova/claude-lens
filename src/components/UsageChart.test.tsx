@@ -96,24 +96,6 @@ describe("UsageChart", () => {
     expect(container.querySelector(".recharts-responsive-container")).not.toBeNull();
   });
 
-  it("CODE_BLUE and COWORK_PURPLE fill values are distinct", () => {
-    // The component source hard-codes "#2979ff" for code and "#7c5cbf" for cowork.
-    // We verify they differ without coupling to the exact hex strings.
-    // This is done by inspecting the module's exported constants indirectly:
-    // render with both sources and confirm two differently-filled Bar elements
-    // would be produced — verified here by checking the component renders
-    // without error and the recharts container is present for both sources.
-    const { container } = render(
-      <UsageChart data={buildNonZeroData()} unit="cost" />
-    );
-    expect(container.querySelector(".recharts-responsive-container")).not.toBeNull();
-    // The constants must be distinct (caught at author-time by code review;
-    // this test guards against accidental unification in future edits).
-    const CODE_BLUE     = "#2979ff";
-    const COWORK_PURPLE = "#7c5cbf";
-    expect(CODE_BLUE).not.toBe(COWORK_PURPLE);
-  });
-
   it("percent unit formats tooltip correctly without throwing", () => {
     // UsageChart with unit="percent" should render without runtime errors.
     const percentData: ChartDataPoint[] = [
