@@ -116,6 +116,6 @@ describe("StaleIndicator", () => {
 describe("SleepIndicator", () => {
   it("renders the sleep banner", () => {
     const { container } = render(<SleepIndicator />);
-    expect(container.textContent?.toLowerCase()).toContain("sleep");
+    expect(container.textContent).toContain("sleeping · resumes on activity or at next working hours");
   });
 });

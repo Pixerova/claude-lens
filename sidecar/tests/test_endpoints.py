@@ -132,17 +132,12 @@ def _seed_sessions(rows: list[dict]) -> None:
 # GET /health
 # ══════════════════════════════════════════════════════════════════════════════
 
-async def test_health_returns_200(isolated_db):
-    async with _api_client() as (_, client, __):
-        resp = await client.get("/health")
-    assert resp.status_code == 200
-
-
 async def test_health_contains_required_fields(isolated_db):
     """Response must include authError (bool), lastPollAt, and a db sub-object
     with snapshot_count and session_count."""
     async with _api_client() as (_, client, __):
         resp = await client.get("/health")
+    assert resp.status_code == 200
     data = resp.json()
 
     assert isinstance(data.get("authError"), bool)
@@ -383,7 +378,7 @@ async def test_sessions_stats_correct_values(isolated_db):
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def test_sessions_by_source_both_sources_present(isolated_db):
-    """When both code and cowork sessions exist, both appear in the response."""
+    """Both sources appear in the response and cost totals are accurate."""
     _seed_sessions([
         make_session(session_id="c1", source="code",   started_offset_hours=1, cost_usd=0.10),
         make_session(session_id="w1", source="cowork", started_offset_hours=2, cost_usd=0.05),
@@ -391,20 +386,11 @@ async def test_sessions_by_source_both_sources_present(isolated_db):
     async with _api_client() as (_, client, __):
         resp = await client.get("/sessions/by-source?days=7")
     assert resp.status_code == 200
-    sources = {r["source"] for r in resp.json()}
+    data = resp.json()
+    sources = {r["source"] for r in data}
     assert "code" in sources
     assert "cowork" in sources
-
-
-async def test_sessions_by_source_cost_totals_are_correct(isolated_db):
-    """Total costs across all source rows sum to the seeded total."""
-    _seed_sessions([
-        make_session(session_id="c1", source="code",   started_offset_hours=1, cost_usd=0.10),
-        make_session(session_id="w1", source="cowork", started_offset_hours=2, cost_usd=0.05),
-    ])
-    async with _api_client() as (_, client, __):
-        resp = await client.get("/sessions/by-source?days=7")
-    total = sum(r["totalCostUsd"] for r in resp.json())
+    total = sum(r["totalCostUsd"] for r in data)
     assert abs(total - 0.15) < 0.001
 
 
@@ -427,11 +413,11 @@ async def test_sessions_by_source_single_source_only_returns_that_source(isolate
 
 async def test_sessions_chart_returns_data_for_seeded_days(isolated_db):
     """Chart endpoint returns one row per day-source combination in the window."""
-    # Seed code sessions on the last 7 different days
+    # Seed code sessions at noon on each of the last 7 days to avoid midnight boundary issues
     for i in range(7):
         db.upsert_session_summary(**make_session(
             session_id=f"chart-{i}",
-            started_offset_hours=i * 24 + 1,
+            started_offset_hours=i * 24 + 12,
             cost_usd=0.05,
             source="code",
         ))
@@ -440,9 +426,7 @@ async def test_sessions_chart_returns_data_for_seeded_days(isolated_db):
         resp = await client.get("/sessions/chart?days=7")
     data = resp.json()
     days = {r["day"] for r in data}
-    # With one session per day for 7 days, expect at least 6 distinct day values
-    # (boundary conditions near midnight can shift a session into the 8th day back)
-    assert len(days) >= 6
+    assert len(days) == 7
 
 
 async def test_sessions_chart_rows_have_correct_schema(isolated_db):
@@ -454,7 +438,7 @@ async def test_sessions_chart_rows_have_correct_schema(isolated_db):
     async with _api_client() as (_, client, __):
         resp = await client.get("/sessions/chart?days=7")
     data = resp.json()
-    assert len(data) >= 1
+    assert len(data) == 2
     for row in data:
         assert "day" in row
         assert "source" in row

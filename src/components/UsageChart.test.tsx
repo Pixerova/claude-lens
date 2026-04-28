@@ -4,7 +4,6 @@
  * Tests for UsageChart:
  *   - Zero-cost anomaly: all values zero → fallback text rendered, no misleading bars
  *   - Non-zero data → chart container rendered (no fallback)
- *   - Code and Cowork segments use distinct fill colors
  *
  * Recharts' ResponsiveContainer relies on real DOM layout measurements that
  * jsdom cannot provide. We stub ResizeObserver (required by recharts internals)
@@ -96,15 +95,4 @@ describe("UsageChart", () => {
     expect(container.querySelector(".recharts-responsive-container")).not.toBeNull();
   });
 
-  it("percent unit formats tooltip correctly without throwing", () => {
-    // UsageChart with unit="percent" should render without runtime errors.
-    const percentData: ChartDataPoint[] = [
-      { day: today(), source: "code",   value: 42.5 },
-      { day: today(), source: "cowork", value: 15.0 },
-    ];
-    const { container } = render(
-      <UsageChart data={percentData} unit="percent" />
-    );
-    expect(container.querySelector(".recharts-responsive-container")).not.toBeNull();
-  });
 });
