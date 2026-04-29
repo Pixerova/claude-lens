@@ -630,9 +630,11 @@ def _write_onboarding_complete() -> None:
         except Exception:
             pass
     existing["onboardingComplete"] = True
-    tmp = Path(tempfile.mktemp(dir=CONFIG_PATH.parent, prefix=".cfg_"))
+    fd, tmp_path = tempfile.mkstemp(dir=CONFIG_PATH.parent, prefix=".cfg_")
+    tmp = Path(tmp_path)
     try:
-        tmp.write_text(json.dumps(existing, indent=2))
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(existing, indent=2))
         os.replace(tmp, CONFIG_PATH)
     except Exception:
         tmp.unlink(missing_ok=True)

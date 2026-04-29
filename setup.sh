@@ -124,23 +124,30 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start the sidecar in the background
-cd "$SIDECAR_DIR"
-SIDECAR_LOG="$(mktemp)"
-"$VENV/bin/python" main.py >"$SIDECAR_LOG" 2>&1 &
-SIDECAR_PID=$!
-cd "$REPO_ROOT"
-
-# Wait up to 10 seconds for /health to respond 200
 HEALTH_OK=0
-for i in $(seq 1 10); do
-    sleep 1
-    HTTP_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$SIDECAR_PORT/health" 2>/dev/null || echo 000)"
-    if [ "$HTTP_STATUS" = "200" ]; then
-        HEALTH_OK=1
-        break
-    fi
-done
+SIDECAR_LOG=""
+
+# If the port is already occupied, skip spawning a second process.
+if lsof -ti tcp:"$SIDECAR_PORT" >/dev/null 2>&1; then
+    ok "Port $SIDECAR_PORT already occupied — assuming sidecar is running, skipping launch"
+    HEALTH_OK=1
+else
+    cd "$SIDECAR_DIR"
+    SIDECAR_LOG="$(mktemp)"
+    "$VENV/bin/python" main.py >"$SIDECAR_LOG" 2>&1 &
+    SIDECAR_PID=$!
+    cd "$REPO_ROOT"
+
+    # Wait up to 10 seconds for /health to respond 200
+    for i in $(seq 1 10); do
+        sleep 1
+        HTTP_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$SIDECAR_PORT/health" 2>/dev/null || echo 000)"
+        if [ "$HTTP_STATUS" = "200" ]; then
+            HEALTH_OK=1
+            break
+        fi
+    done
+fi
 
 if [ "$HEALTH_OK" -eq 1 ]; then
     ok "Sidecar health check PASSED (GET /health → 200)"

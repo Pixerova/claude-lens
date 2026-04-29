@@ -132,7 +132,7 @@ const ReadyStep: React.FC<ReadyStepProps> = ({ onComplete }) => {
 
   useEffect(() => {
     let cancelled = false;
-    const fetch = async () => {
+    const loadData = async () => {
       try {
         const [u, stats] = await Promise.all([
           api.getUsageCurrent(),
@@ -148,7 +148,7 @@ const ReadyStep: React.FC<ReadyStepProps> = ({ onComplete }) => {
         if (!cancelled) setLoading(false);
       }
     };
-    fetch();
+    loadData();
     return () => { cancelled = true; };
   }, []);
 

@@ -33,7 +33,7 @@ fi
 
 TRIPLE="$("$RUSTC_BIN" -vV 2>/dev/null | awk '/^host:/ {print $2}')"
 if [ -z "$TRIPLE" ]; then
-    echo "ERROR: Could not determine Rust host triple. Is rustc on PATH?" >&2
+    echo "ERROR: Could not determine Rust host triple from '$RUSTC_BIN'. The toolchain may be incomplete." >&2
     exit 1
 fi
 
