@@ -607,6 +607,50 @@ def suggestion_snoozed(suggestion_id: str, body: SnoozeRequest):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+# ── Onboarding ────────────────────────────────────────────────────────────────
+
+def _read_onboarding_complete() -> bool:
+    """Return True if onboardingComplete is set in config.json."""
+    try:
+        if CONFIG_PATH.exists():
+            data = json.loads(CONFIG_PATH.read_text())
+            return bool(data.get("onboardingComplete", False))
+    except Exception:
+        pass
+    return False
+
+
+def _write_onboarding_complete() -> None:
+    """Write onboardingComplete: true to config.json, preserving existing keys."""
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    existing: dict = {}
+    if CONFIG_PATH.exists():
+        try:
+            existing = json.loads(CONFIG_PATH.read_text())
+        except Exception:
+            pass
+    existing["onboardingComplete"] = True
+    CONFIG_PATH.write_text(json.dumps(existing, indent=2))
+
+
+@app.get("/onboarding/status")
+def onboarding_status():
+    """Return whether first-launch onboarding has been completed."""
+    return {"complete": _read_onboarding_complete()}
+
+
+@app.post("/onboarding/complete")
+def onboarding_complete():
+    """Mark onboarding as complete and persist the flag to config.json."""
+    try:
+        _write_onboarding_complete()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to write config: {exc}")
+    return {"status": "ok", "complete": True}
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
 class _SuppressHealthOptions(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         return 'OPTIONS /health' not in record.getMessage()

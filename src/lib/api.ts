@@ -95,6 +95,10 @@ export interface Suggestion {
   actions: string[];
 }
 
+export interface OnboardingStatus {
+  complete: boolean;
+}
+
 export interface SuggestionsResponse {
   suggestions: Suggestion[];
   trigger_context: {
@@ -198,5 +202,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ until }),
     });
+  },
+
+  /** Check whether first-launch onboarding has been completed. */
+  getOnboardingStatus(): Promise<OnboardingStatus> {
+    return sidecarFetch<OnboardingStatus>("/onboarding/status");
+  },
+
+  /** Mark onboarding as complete and write the flag to config.json. */
+  completeOnboarding(): Promise<void> {
+    return sidecarFetch<void>("/onboarding/complete", { method: "POST" });
   },
 };

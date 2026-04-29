@@ -23,6 +23,8 @@ import { SessionList }      from "./components/SessionList";
 import { UsageChart }       from "./components/UsageChart";
 import { SuggestionBadge }  from "./components/SuggestionBadge";
 import { SuggestionTray }   from "./components/SuggestionTray";
+import Onboarding           from "./components/Onboarding";
+import { api }              from "./lib/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -159,6 +161,15 @@ const ErrorPanel: React.FC<{ onRetry: () => void; loading: boolean }> = ({ onRet
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  // null = loading, true/false = resolved
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api.getOnboardingStatus()
+      .then((s) => setOnboardingComplete(s.complete))
+      .catch(() => setOnboardingComplete(true)); // if sidecar unreachable, skip onboarding
+  }, []);
+
   const [expanded, setExpanded] = useState(false);
   const [showTray, setShowTray] = useState(false);
 
@@ -246,6 +257,14 @@ export default function App() {
     return chartData.map(pt => ({ ...pt, value: (pt.value / total) * 100 }));
   }, [chartData]);
 
+
+  // Show nothing while we're fetching onboarding status (avoids a flash).
+  if (onboardingComplete === null) return null;
+
+  // First launch: show onboarding and return early.
+  if (!onboardingComplete) {
+    return <Onboarding onComplete={() => setOnboardingComplete(true)} />;
+  }
 
   return (
     <div className="min-h-screen flex items-start justify-center p-2 bg-transparent">
