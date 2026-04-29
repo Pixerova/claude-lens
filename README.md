@@ -2,6 +2,9 @@
 
 > macOS widget for Claude Pro — real-time usage gauges, session insights, and smart suggestions to stop leaving weekly capacity on the table.
 
+<!-- screenshot placeholder — replace with actual screenshot once available -->
+<!-- ![claude-lens widget screenshot](docs/screenshot.png) -->
+
 ---
 
 ## What it is
@@ -9,6 +12,50 @@
 claude-lens is a macOS menu bar app and floating overlay widget for Claude Pro subscribers. It shows your live plan limits (current session and weekly), breaks down usage by source (Claude Code vs Cowork), and surfaces AI-powered suggestions so you make the most of every reset window.
 
 Most Claude usage monitors answer: *"How much have I spent?"* claude-lens answers: *"How much do I have left — and what could I do with it?"*
+
+---
+
+## Getting started
+
+### Prerequisites
+
+| Tool | Minimum version | How to install |
+|---|---|---|
+| Rust toolchain | 1.77+ | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+| Node.js | 18+ | `brew install node` or [nodejs.org](https://nodejs.org) |
+| Python | 3.11+ | `brew install python@3.11` |
+| Tauri CLI | v2 | `cargo install tauri-cli --version '^2'` |
+
+### Dev build
+
+```bash
+./setup.sh          # checks tools, installs deps, creates Python venv, runs health check
+npm run tauri dev   # starts the Vite dev server + Tauri shell; Python sidecar runs separately
+```
+
+To run the sidecar in dev mode:
+
+```bash
+npm run sidecar     # cd sidecar && python main.py
+```
+
+### Release build
+
+```bash
+./setup.sh                  # one-time environment setup
+scripts/build_sidecar.sh    # compile sidecar → src-tauri/binaries/sidecar-<triple>
+npm run tauri build         # produce the .dmg / .app bundle
+```
+
+### Running tests
+
+```bash
+# Python sidecar
+pytest sidecar/tests/ -v
+
+# Frontend
+npm test
+```
 
 ## What it shows
 
@@ -97,4 +144,4 @@ To contribute a built-in suggestion instead, edit [`sidecar/data/suggestions.yam
 
 ## License
 
-GNU GENERAL PUBLIC LICENSE Version 3
+GNU General Public License v3.0 — see [LICENSE](LICENSE) for the full text.
