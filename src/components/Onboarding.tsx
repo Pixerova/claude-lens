@@ -13,7 +13,7 @@
  *     One button completes onboarding and opens the main widget.
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import type { UsageCurrent } from "../lib/api";
 
@@ -32,6 +32,9 @@ interface KeychainStepProps {
 
 const KeychainStep: React.FC<KeychainStepProps> = ({ onSuccess }) => {
   const [state, setState] = useState<KeychainState>("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const handleGrant = useCallback(async () => {
     setState("loading");
@@ -40,7 +43,7 @@ const KeychainStep: React.FC<KeychainStepProps> = ({ onSuccess }) => {
       if (status.authenticated) {
         setState("success");
         // Short pause so the success state is visible, then advance.
-        setTimeout(onSuccess, 600);
+        timerRef.current = setTimeout(onSuccess, 600);
       } else {
         setState("error");
       }

@@ -16,6 +16,8 @@ Startup sequence:
 import asyncio
 import json
 import logging
+import os
+import tempfile
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -605,8 +607,6 @@ def suggestion_snoozed(suggestion_id: str, body: SnoozeRequest):
     return {"status": "ok", "suggestion_id": suggestion_id, "snoozed_until": body.until}
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
-
 # ── Onboarding ────────────────────────────────────────────────────────────────
 
 def _read_onboarding_complete() -> bool:
@@ -630,7 +630,13 @@ def _write_onboarding_complete() -> None:
         except Exception:
             pass
     existing["onboardingComplete"] = True
-    CONFIG_PATH.write_text(json.dumps(existing, indent=2))
+    tmp = Path(tempfile.mktemp(dir=CONFIG_PATH.parent, prefix=".cfg_"))
+    try:
+        tmp.write_text(json.dumps(existing, indent=2))
+        os.replace(tmp, CONFIG_PATH)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 @app.get("/onboarding/status")

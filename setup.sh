@@ -6,7 +6,7 @@
 #
 # Safe to run more than once: skips steps already complete.
 
-set -e
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 SIDECAR_DIR="$REPO_ROOT/sidecar"
@@ -126,7 +126,8 @@ trap cleanup EXIT
 
 # Start the sidecar in the background
 cd "$SIDECAR_DIR"
-"$VENV/bin/python" main.py >/dev/null 2>&1 &
+SIDECAR_LOG="$(mktemp)"
+"$VENV/bin/python" main.py >"$SIDECAR_LOG" 2>&1 &
 SIDECAR_PID=$!
 cd "$REPO_ROOT"
 
@@ -143,9 +144,12 @@ done
 
 if [ "$HEALTH_OK" -eq 1 ]; then
     ok "Sidecar health check PASSED (GET /health → 200)"
+    rm -f "$SIDECAR_LOG"
 else
     fail "Sidecar health check FAILED — /health did not return 200 within 10 seconds"
-    echo "  Check that port $SIDECAR_PORT is free and no import errors exist in sidecar/main.py"
+    echo "  Sidecar output:"
+    cat "$SIDECAR_LOG"
+    rm -f "$SIDECAR_LOG"
     exit 1
 fi
 

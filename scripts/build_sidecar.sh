@@ -21,14 +21,17 @@ VENV="$SIDECAR_DIR/.venv"
 
 # Use the Rust host triple so the binary name matches what Tauri bundles.
 # This may differ from `uname -m` (e.g. an x86_64 Rust toolchain under Rosetta).
-RUSTC="${HOME}/.cargo/bin/rustc"
-if ! command -v rustc >/dev/null 2>&1 && [ ! -x "$RUSTC" ]; then
+if command -v rustc >/dev/null 2>&1; then
+    RUSTC_BIN="rustc"
+elif [ -x "${HOME}/.cargo/bin/rustc" ]; then
+    RUSTC_BIN="${HOME}/.cargo/bin/rustc"
+else
     echo "ERROR: rustc not found. Install the Rust toolchain first." >&2
     echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" >&2
     exit 1
 fi
 
-TRIPLE="$(rustc -vV 2>/dev/null | awk '/^host:/ {print $2}')"
+TRIPLE="$("$RUSTC_BIN" -vV 2>/dev/null | awk '/^host:/ {print $2}')"
 if [ -z "$TRIPLE" ]; then
     echo "ERROR: Could not determine Rust host triple. Is rustc on PATH?" >&2
     exit 1
