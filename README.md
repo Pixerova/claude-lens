@@ -1,6 +1,10 @@
 # claude-lens
 
 > macOS widget for Claude Pro — real-time usage gauges, session insights, and smart suggestions to stop leaving weekly capacity on the table.
+Built with Claude Pro!
+
+<!-- screenshot placeholder — replace with actual screenshot once available -->
+<!-- ![claude-lens widget screenshot](docs/screenshot.png) -->
 
 ---
 
@@ -10,7 +14,40 @@ claude-lens is a macOS menu bar app and floating overlay widget for Claude Pro s
 
 Most Claude usage monitors answer: *"How much have I spent?"* claude-lens answers: *"How much do I have left — and what could I do with it?"*
 
-## What it shows
+---
+
+## Getting started
+
+### Build to Run!
+
+**1. Check prerequisites**
+
+```bash
+./setup.sh
+```
+
+This verifies you have Rust, Node.js, Python 3.11+, and Tauri CLI installed, then installs Node and Python dependencies. It will tell you exactly what to install if anything is missing.
+
+**2. Build**
+
+```bash
+scripts/build_sidecar.sh    # compile Python sidecar → native binary
+npm run tauri build         # produce the .app / .dmg bundle
+```
+
+**3. Run**
+
+```bash
+open "src-tauri/target/release/bundle/macos/claude-lens.app"
+```
+
+Or open the `.dmg` from `src-tauri/target/release/bundle/dmg/` to install it like any Mac app.
+
+---
+
+For development (hot-reload, tests), see [DEVSETUP.md](DEVSETUP.md).
+
+## What claude-lens shows
 
 **Plan utilization**
 - Current session % and weekly % with time until reset, pulled directly from the Anthropic OAuth API
@@ -97,4 +134,4 @@ To contribute a built-in suggestion instead, edit [`sidecar/data/suggestions.yam
 
 ## License
 
-GNU GENERAL PUBLIC LICENSE Version 3
+GNU General Public License v3.0 — see [LICENSE](LICENSE) for the full text.

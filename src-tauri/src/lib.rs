@@ -7,7 +7,7 @@
 //   - Global hotkey: Option+Space to show/hide the overlay window
 //   - Window management: always-on-top, position persistence
 
-use std::sync::Mutex;
+use std::{fs, path::PathBuf, sync::Mutex};
 use tauri::{
     AppHandle, Manager, Runtime,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -31,13 +31,56 @@ fn open_claude_app() -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+// ── Config helpers ────────────────────────────────────────────────────────────
+
+fn claudelens_config_path() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default()
+        .join(".claudelens")
+        .join("config.json")
+}
+
+#[tauri::command]
+fn get_onboarding_complete() -> bool {
+    let path = claudelens_config_path();
+    let Ok(text) = fs::read_to_string(&path) else { return false; };
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v.get("onboardingComplete").and_then(|f| f.as_bool()))
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+fn set_onboarding_complete() -> Result<(), String> {
+    let path = claudelens_config_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let mut config: serde_json::Value = path
+        .exists()
+        .then(|| fs::read_to_string(&path).ok())
+        .flatten()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(serde_json::json!({}));
+    config["onboardingComplete"] = serde_json::Value::Bool(true);
+    let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, &json).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        e.to_string()
+    })?;
+    Ok(())
+}
+
 // ── Sidecar ───────────────────────────────────────────────────────────────────
 
 fn start_sidecar(app: &AppHandle) {
     use tauri_plugin_shell::ShellExt;
     let shell = app.shell();
     // The sidecar binary is bundled at binaries/sidecar (configured in tauri.conf.json).
-    // In dev mode we spawn the Python process directly instead (see SETUP.md).
+    // In dev mode we spawn the Python process directly instead (see DEVSETUP.md).
     match shell.sidecar("sidecar") {
         Ok(cmd) => {
             match cmd.spawn() {
@@ -88,7 +131,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![open_claude_app])
+        .invoke_handler(tauri::generate_handler![open_claude_app, get_onboarding_complete, set_onboarding_complete])
         .setup(|app| {
             // 1. Start the Python sidecar
             app.manage(SidecarHandle(Mutex::new(None)));

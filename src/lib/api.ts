@@ -5,7 +5,15 @@
  * JSON parsing, and error normalisation.
  */
 
+import { invoke } from "@tauri-apps/api/core";
+
 const BASE_URL = "http://127.0.0.1:8765";
+
+// Cached once resolved — avoids a Tauri invoke on every re-mount (e.g. StrictMode).
+// In tests, spy on api.getOnboardingStatus / api.completeOnboarding directly rather
+// than relying on invoke mocks: this variable persists across test cases within the
+// same module instance and will short-circuit the real implementation.
+let _onboardingComplete: boolean | null = null;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,6 +101,10 @@ export interface Suggestion {
   prompt: string;
   trigger: string;
   actions: string[];
+}
+
+export interface OnboardingStatus {
+  complete: boolean;
 }
 
 export interface SuggestionsResponse {
@@ -197,6 +209,22 @@ export const api = {
     return sidecarFetch<void>(`/suggestions/${id}/snoozed`, {
       method: "POST",
       body: JSON.stringify({ until }),
+    });
+  },
+
+  /** Check whether first-launch onboarding has been completed (reads config.json directly via Tauri). */
+  getOnboardingStatus(): Promise<OnboardingStatus> {
+    if (_onboardingComplete !== null) return Promise.resolve({ complete: _onboardingComplete });
+    return invoke<boolean>("get_onboarding_complete").then(complete => {
+      _onboardingComplete = complete;
+      return { complete };
+    });
+  },
+
+  /** Mark onboarding as complete and write the flag to config.json via Tauri. */
+  completeOnboarding(): Promise<void> {
+    return invoke<void>("set_onboarding_complete").then(() => {
+      _onboardingComplete = true;
     });
   },
 };

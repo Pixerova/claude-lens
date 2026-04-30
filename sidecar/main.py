@@ -159,9 +159,19 @@ def _on_poller_update(snapshot) -> None:
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
+class _SuppressOptions(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return '"OPTIONS ' not in record.getMessage()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _config, _poller, _poller_task, _watcher, _all_suggestions, _suggestions_yaml_error
+
+    # Suppress all OPTIONS preflight requests from the access log (intentionally
+    # broad — every endpoint). Installed here so uvicorn's dictConfig during
+    # startup doesn't clear the filter before it takes effect.
+    logging.getLogger("uvicorn.access").addFilter(_SuppressOptions())
 
     # 1. Config
     _config = load_config()
@@ -604,15 +614,8 @@ def suggestion_snoozed(suggestion_id: str, body: SnoozeRequest):
     db.record_suggestion_snoozed(suggestion_id, body.until)
     return {"status": "ok", "suggestion_id": suggestion_id, "snoozed_until": body.until}
 
-
 # ── Entry point ───────────────────────────────────────────────────────────────
-
-class _SuppressHealthOptions(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        return 'OPTIONS /health' not in record.getMessage()
-
 
 if __name__ == "__main__":
     import uvicorn
-    logging.getLogger("uvicorn.access").addFilter(_SuppressHealthOptions())
     uvicorn.run(app, host="127.0.0.1", port=8765, reload=False)
