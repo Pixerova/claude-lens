@@ -73,6 +73,7 @@ if ! "$VENV/bin/pyinstaller" \
         --distpath dist \
         --clean \
         --noconfirm \
+        --add-data "data:data" \
         main.py; then
     echo "" >&2
     echo "ERROR: PyInstaller compilation failed. See output above for details." >&2
