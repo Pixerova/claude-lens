@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 
 USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage"
 API_BETA_HEADER = "oauth-2025-04-20"
-STATE_PATH = Path.home() / ".claudelens" / "state.json"
+STATE_PATH = Path.home() / ".claude-lens" / "state.json"
 
 # Default poll thresholds (utilisation → interval seconds).
 # Overridable via config.json "poll.thresholds".

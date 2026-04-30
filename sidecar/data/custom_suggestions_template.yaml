@@ -1,8 +1,8 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# Claude Lens — Custom Suggestions
+# claude-lens — Custom Suggestions
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Add your own suggestions here. Claude Lens loads this file at startup
+# Add your own suggestions here. claude-lens loads this file at startup
 # alongside the built-in suggestions — restart the sidecar to pick up changes.
 #
 # REQUIREMENTS

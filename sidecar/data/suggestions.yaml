@@ -1,8 +1,8 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# Claude Lens — Rule Engine Suggestions
+# claude-lens — Rule Engine Suggestions
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# This file defines all suggestions surfaced by the Claude Lens rule engine.
+# This file defines all suggestions surfaced by the claude-lens rule engine.
 # It is designed to grow over time, including via open source contributions.
 #
 # SCHEMA

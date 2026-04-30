@@ -19,11 +19,11 @@ python3 sidecar/validate_suggestions.py sidecar/data/suggestions.yaml
 ```
 
 If it exits with a message like `42 entries, all valid.` you're good to go. The validator checks required fields, type constraints, and naming rules.
-To validate a personal custom file at `~/.claudelens/custom_suggestions.yaml`, run it with no argument.
+To validate a personal custom file at `~/.claude-lens/custom_suggestions.yaml`, run it with no argument.
 
 ### Naming rules for custom suggestions
 
-If you are adding suggestions meant for personal or local use (not for merging into the built-in set), prefix both `id` and `category` with `custom_` and place them in `~/.claudelens/custom_suggestions.yaml` instead. This keeps them out of source control and prevents ID collisions with built-in entries.
+If you are adding suggestions meant for personal or local use (not for merging into the built-in set), prefix both `id` and `category` with `custom_` and place them in `~/.claude-lens/custom_suggestions.yaml` instead. This keeps them out of source control and prevents ID collisions with built-in entries.
 
 For a contribution to the built-in set, choose a descriptive ID in the form `<category><nnn>` (e.g. `testing001`, `refactor003`) and pick the most appropriate existing category, or propose a new one in your PR description.
 

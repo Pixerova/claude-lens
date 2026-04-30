@@ -30,6 +30,8 @@ This verifies you have Rust, Node.js, Python 3.11+, and Tauri CLI installed, the
 
 **2. Build**
 
+> **macOS permission (first time only):** The build script below runs an AppleScript against Finder to configure the DMG window layout. macOS will show an Automation permission dialog the first time — click OK. If you previously denied it, re-enable it in **System Settings → Privacy & Security → Automation** (your terminal app → Finder). Without this the build fails with a generic `error running bundle_dmg.sh` message. To see the underlying cause, run `RUST_LOG=tauri_bundler=debug npm run tauri build`.
+
 ```bash
 scripts/build_sidecar.sh    # compile Python sidecar → native binary
 npm run tauri build         # produce the .app / .dmg bundle
@@ -76,7 +78,7 @@ The poll interval adapts dynamically: checking every couple minutes when you're 
 
 ## Configuration
 
-claude-lens reads `~/.claudelens/config.json` on startup. The file is optional — all keys have defaults. Any keys you provide are deep-merged over the defaults, so you only need to include what you want to change.
+claude-lens reads `~/.claude-lens/config.json` on startup. The file is optional — all keys have defaults. Any keys you provide are deep-merged over the defaults, so you only need to include what you want to change.
 
 ```json
 {
@@ -110,12 +112,12 @@ claude-lens reads `~/.claudelens/config.json` on startup. The file is optional �
 
 ### Add your own suggestions
 
-On first launch the sidecar creates `~/.claudelens/custom_suggestions.yaml` from a commented template. Add your cards there — the app loads it alongside the built-in suggestions on every restart without touching your edits.
+On first launch the sidecar creates `~/.claude-lens/custom_suggestions.yaml` from a commented template. Add your cards there — the app loads it alongside the built-in suggestions on every restart without touching your edits.
 
 Every custom entry must have its `id` and `category` prefixed with `custom_` (e.g. `id: custom_productivity001`, `category: custom_productivity`). This keeps your suggestions distinct from built-in ones and lets the UI show their source. Run the validator to check before restarting:
 
 ```bash
-python sidecar/validate_suggestions.py          # checks ~/.claudelens/custom_suggestions.yaml
+python sidecar/validate_suggestions.py          # checks ~/.claude-lens/custom_suggestions.yaml
 python sidecar/validate_suggestions.py path/to/file.yaml   # or a specific file
 ```
 

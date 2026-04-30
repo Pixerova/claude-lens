@@ -38,10 +38,10 @@ if ! .venv/bin/python -c "import PyInstaller" 2>/dev/null; then
 fi
 
 # Compile
-.venv/bin/pyinstaller --onefile --name sidecar --distpath dist --clean --noconfirm main.py
+.venv/bin/pyinstaller --onefile --name claude-lens-sidecar --distpath dist --clean --noconfirm main.py
 
 # Copy to where Tauri expects it
-DEST="$BINARIES_DIR/sidecar-$TRIPLE"
-cp dist/sidecar "$DEST"
-echo "Binary written to src-tauri/binaries/sidecar-$TRIPLE"
+DEST="$BINARIES_DIR/claude-lens-sidecar-$TRIPLE"
+cp dist/claude-lens-sidecar "$DEST"
+echo "Binary written to src-tauri/binaries/claude-lens-sidecar-$TRIPLE"
 echo "Done. You can now run: cargo tauri build"

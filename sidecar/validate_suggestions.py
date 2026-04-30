@@ -12,7 +12,7 @@ Checks that all entries conform to the custom suggestion conventions:
 Usage:
     python validate_suggestions.py [path/to/custom_suggestions.yaml]
 
-If no path is given, validates ~/.claudelens/custom_suggestions.yaml.
+If no path is given, validates ~/.claude-lens/custom_suggestions.yaml.
 
 Exit codes:
     0  All entries are valid (or the file has no entries).
@@ -30,7 +30,7 @@ import yaml
 
 from suggestions_schema import CUSTOM_PREFIX, VALID_TRIGGERS, REQUIRED_FIELDS
 
-_DEFAULT_PATH = Path.home() / ".claudelens" / "custom_suggestions.yaml"
+_DEFAULT_PATH = Path.home() / ".claude-lens" / "custom_suggestions.yaml"
 
 
 def _check_entry(entry: Any, index: int) -> list[str]:

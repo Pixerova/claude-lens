@@ -1,7 +1,7 @@
 """
 test_db.py — Tests for db.py: schema, writers, readers, pruning, stats.
 Every test uses the `isolated_db` fixture so it works against a fresh
-in-memory-equivalent temp database, never ~/.claudelens.
+in-memory-equivalent temp database, never ~/.claude-lens.
 """
 
 import sqlite3

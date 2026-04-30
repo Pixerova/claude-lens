@@ -83,7 +83,7 @@ Tray icon: left-click to toggle, right-click for Open / Quit menu.
 
 | Path | Contents |
 |------|----------|
-| `~/.claudelens/claudelens.db` | SQLite: usage snapshots, session summaries |
-| `~/.claudelens/state.json` | Ephemeral poll state + offline cache |
+| `~/.claude-lens/claudelens.db` | SQLite: usage snapshots, session summaries |
+| `~/.claude-lens/state.json` | Ephemeral poll state + offline cache |
 | `~/.claude/projects/**/*.jsonl` | Claude Code session logs (read-only) |
 | `~/Library/Application Support/Claude/claude-code-sessions/` | Cowork session logs (read-only) |

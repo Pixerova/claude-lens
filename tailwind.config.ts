@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Claude Lens dark theme palette
+        // claude-lens dark theme palette
         surface:  "#1a1a1a",
         elevated: "#242424",
         border:   "#333333",
