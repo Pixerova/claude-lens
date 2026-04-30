@@ -10,7 +10,6 @@
  * and verify structural behaviour rather than SVG pixel output.
  */
 
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import { vi, describe, it, expect, beforeAll } from "vitest";
 import { UsageChart, ChartDataPoint } from "./UsageChart";
@@ -24,7 +23,7 @@ beforeAll(() => {
     constructor(_cb: ResizeObserverCallback) {}
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (global as any).ResizeObserver = MockResizeObserver;
+  (globalThis as any).ResizeObserver = MockResizeObserver;
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

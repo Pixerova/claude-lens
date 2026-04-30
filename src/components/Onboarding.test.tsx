@@ -13,8 +13,7 @@
  * All sidecar API calls are intercepted with vi.spyOn on the api module.
  */
 
-import React from "react";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // ── Mock Tauri internals before any component import ──────────────────────────
@@ -226,7 +225,7 @@ describe("Onboarding — Step 2 (Ready)", () => {
   });
 
   it("calls completeOnboarding when Start claude-lens is clicked", async () => {
-    const { onComplete } = await renderOnStep2();
+    await renderOnStep2();
     await waitFor(() => screen.getByRole("button", { name: /start claude-lens/i }));
     fireEvent.click(screen.getByRole("button", { name: /start claude-lens/i }));
     await waitFor(() => {

@@ -79,6 +79,15 @@ else
     MISSING=1
 fi
 
+# create-dmg — required by `npm run tauri build` to produce the .dmg bundle
+if command -v create-dmg >/dev/null 2>&1; then
+    ok "create-dmg $(create-dmg --version 2>/dev/null | head -1)"
+else
+    fail "create-dmg not found."
+    echo "  Install via: brew install create-dmg"
+    MISSING=1
+fi
+
 # Tauri CLI — accept either cargo plugin or npm shim
 TAURI_OK=0
 if cargo tauri --version >/dev/null 2>&1; then
