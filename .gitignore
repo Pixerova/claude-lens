@@ -11,6 +11,7 @@ build/
 # PyInstaller
 sidecar/dist/
 sidecar/build/
+sidecar/*.spec
 
 # Pre-built sidecar binaries (build locally via scripts/build-sidecar.sh)
 src-tauri/binaries/
