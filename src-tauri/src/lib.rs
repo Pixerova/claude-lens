@@ -80,7 +80,7 @@ fn start_sidecar(app: &AppHandle) {
     use tauri_plugin_shell::ShellExt;
     let shell = app.shell();
     // The sidecar binary is bundled at binaries/sidecar (configured in tauri.conf.json).
-    // In dev mode we spawn the Python process directly instead (see SETUP.md).
+    // In dev mode we spawn the Python process directly instead (see DEVSETUP.md).
     match shell.sidecar("sidecar") {
         Ok(cmd) => {
             match cmd.spawn() {

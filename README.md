@@ -1,6 +1,7 @@
 # claude-lens
 
 > macOS widget for Claude Pro — real-time usage gauges, session insights, and smart suggestions to stop leaving weekly capacity on the table.
+Built with Claude Pro!
 
 <!-- screenshot placeholder — replace with actual screenshot once available -->
 <!-- ![claude-lens widget screenshot](docs/screenshot.png) -->
@@ -17,47 +18,36 @@ Most Claude usage monitors answer: *"How much have I spent?"* claude-lens answer
 
 ## Getting started
 
-### Prerequisites
+### Build to Run!
 
-| Tool | Minimum version | How to install |
-|---|---|---|
-| Rust toolchain | 1.77+ | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| Node.js | 18+ | `brew install node` or [nodejs.org](https://nodejs.org) |
-| Python | 3.11+ | `brew install python@3.11` |
-| Tauri CLI | v2 | `cargo install tauri-cli --version '^2'` |
-
-### Dev build
+**1. Check prerequisites**
 
 ```bash
-./setup.sh          # checks tools, installs deps, creates Python venv, runs health check
-npm run tauri dev   # starts the Vite dev server + Tauri shell; Python sidecar runs separately
+./setup.sh
 ```
 
-To run the sidecar in dev mode:
+This verifies you have Rust, Node.js, Python 3.11+, and Tauri CLI installed, then installs Node and Python dependencies. It will tell you exactly what to install if anything is missing.
+
+**2. Build**
 
 ```bash
-npm run sidecar     # cd sidecar && python main.py
+scripts/build_sidecar.sh    # compile Python sidecar → native binary
+npm run tauri build         # produce the .app / .dmg bundle
 ```
 
-### Release build
+**3. Run**
 
 ```bash
-./setup.sh                  # one-time environment setup
-scripts/build_sidecar.sh    # compile sidecar → src-tauri/binaries/sidecar-<triple>
-npm run tauri build         # produce the .dmg / .app bundle
+open "src-tauri/target/release/bundle/macos/claude-lens.app"
 ```
 
-### Running tests
+Or open the `.dmg` from `src-tauri/target/release/bundle/dmg/` to install it like any Mac app.
 
-```bash
-# Python sidecar
-pytest sidecar/tests/ -v
+---
 
-# Frontend
-npm test
-```
+For development (hot-reload, tests), see [DEVSETUP.md](DEVSETUP.md).
 
-## What it shows
+## What claude-lens shows
 
 **Plan utilization**
 - Current session % and weekly % with time until reset, pulled directly from the Anthropic OAuth API

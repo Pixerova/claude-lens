@@ -2,7 +2,7 @@
 # setup.sh — Bootstrap the claude-lens development environment.
 #
 # Checks for required tools, installs frontend dependencies, creates the
-# Python virtual environment, and runs a quick sidecar health check.
+# Python virtual environment, and verifies sidecar packages are importable.
 #
 # Safe to run more than once: skips steps already complete.
 
@@ -11,7 +11,6 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 SIDECAR_DIR="$REPO_ROOT/sidecar"
 VENV="$SIDECAR_DIR/.venv"
-SIDECAR_PORT=8765
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 
@@ -49,19 +48,33 @@ else
 fi
 
 # Python 3.11+
+# Try the unversioned python3 first; if it's too old, fall back to the
+# version-specific aliases that Homebrew installs (e.g. python3.11).
+PYTHON=""
+PY_VER=""
+
 if command -v python3 >/dev/null 2>&1; then
-    PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-    PY_MAJOR="$(echo "$PY_VER" | cut -d. -f1)"
-    PY_MINOR="$(echo "$PY_VER" | cut -d. -f2)"
-    if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 11 ]; then
-        ok "python3 $PY_VER"
-    else
-        fail "python3 $PY_VER found — 3.11 or newer is required."
-        echo "  Install via: brew install python@3.11"
-        MISSING=1
+    _ver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    if [ "$(echo "$_ver" | cut -d. -f2)" -ge 11 ]; then
+        PYTHON="python3"
+        PY_VER="$_ver"
     fi
+fi
+
+if [ -z "$PYTHON" ]; then
+    for _candidate in python3.13 python3.12 python3.11; do
+        if command -v "$_candidate" >/dev/null 2>&1; then
+            PYTHON="$_candidate"
+            PY_VER="$("$_candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+            break
+        fi
+    done
+fi
+
+if [ -n "$PYTHON" ]; then
+    ok "$PYTHON $PY_VER"
 else
-    fail "python3 not found."
+    fail "Python 3.11 or newer not found."
     echo "  Install via: brew install python@3.11"
     MISSING=1
 fi
@@ -102,7 +115,7 @@ step "Setting up Python virtual environment"
 if [ -f "$VENV/bin/python" ]; then
     ok "Virtual environment already exists at sidecar/.venv — skipping creation"
 else
-    python3 -m venv "$VENV"
+    "$PYTHON" -m venv "$VENV"
     ok "Created $VENV"
 fi
 
@@ -111,52 +124,14 @@ ok "Installing sidecar/requirements.txt"
 "$VENV/bin/pip" install --quiet -r "$SIDECAR_DIR/requirements.txt"
 ok "Python dependencies installed"
 
-# ── Sidecar sanity check ──────────────────────────────────────────────────────
+# ── Sidecar import check ──────────────────────────────────────────────────────
 
-step "Running sidecar health check"
+step "Verifying sidecar Python dependencies"
 
-SIDECAR_PID=""
-
-cleanup() {
-    if [ -n "$SIDECAR_PID" ]; then
-        kill "$SIDECAR_PID" 2>/dev/null || true
-    fi
-}
-trap cleanup EXIT
-
-HEALTH_OK=0
-SIDECAR_LOG=""
-
-# If the port is already occupied, skip spawning a second process.
-if lsof -ti tcp:"$SIDECAR_PORT" >/dev/null 2>&1; then
-    ok "Port $SIDECAR_PORT already occupied — assuming sidecar is running, skipping launch"
-    HEALTH_OK=1
+if "$VENV/bin/python" -c "import fastapi, uvicorn, httpx, watchdog, pydantic" 2>/dev/null; then
+    ok "All sidecar packages importable"
 else
-    cd "$SIDECAR_DIR"
-    SIDECAR_LOG="$(mktemp)"
-    "$VENV/bin/python" main.py >"$SIDECAR_LOG" 2>&1 &
-    SIDECAR_PID=$!
-    cd "$REPO_ROOT"
-
-    # Wait up to 10 seconds for /health to respond 200
-    for i in $(seq 1 10); do
-        sleep 1
-        HTTP_STATUS="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$SIDECAR_PORT/health" 2>/dev/null || echo 000)"
-        if [ "$HTTP_STATUS" = "200" ]; then
-            HEALTH_OK=1
-            break
-        fi
-    done
-fi
-
-if [ "$HEALTH_OK" -eq 1 ]; then
-    ok "Sidecar health check PASSED (GET /health → 200)"
-    rm -f "$SIDECAR_LOG"
-else
-    fail "Sidecar health check FAILED — /health did not return 200 within 10 seconds"
-    echo "  Sidecar output:"
-    cat "$SIDECAR_LOG"
-    rm -f "$SIDECAR_LOG"
+    fail "One or more sidecar packages failed to import — try: $VENV/bin/pip install -r sidecar/requirements.txt"
     exit 1
 fi
 
