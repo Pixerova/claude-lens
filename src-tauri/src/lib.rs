@@ -33,7 +33,7 @@ fn open_claude_app() -> Result<(), String> {
 
 // ── Config helpers ────────────────────────────────────────────────────────────
 
-fn claudelens_config_path() -> PathBuf {
+fn claude_lens_config_path() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default()
@@ -43,7 +43,7 @@ fn claudelens_config_path() -> PathBuf {
 
 #[tauri::command]
 fn get_onboarding_complete() -> bool {
-    let path = claudelens_config_path();
+    let path = claude_lens_config_path();
     let Ok(text) = fs::read_to_string(&path) else { return false; };
     serde_json::from_str::<serde_json::Value>(&text)
         .ok()
@@ -53,7 +53,7 @@ fn get_onboarding_complete() -> bool {
 
 #[tauri::command]
 fn set_onboarding_complete() -> Result<(), String> {
-    let path = claudelens_config_path();
+    let path = claude_lens_config_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
