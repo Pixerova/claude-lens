@@ -167,7 +167,7 @@ export default function App() {
   useEffect(() => {
     api.getOnboardingStatus()
       .then((s) => setOnboardingComplete(s.complete))
-      .catch(() => setOnboardingComplete(true)); // if sidecar unreachable, skip onboarding
+      .catch(() => setOnboardingComplete(true)); // if invoke fails, skip onboarding
   }, []);
 
   const [expanded, setExpanded] = useState(false);
@@ -207,8 +207,16 @@ export default function App() {
   // Keep in sync with AuthErrorBanner padding (mt-2 mb-1 py-[7px] + content line-height).
   const AUTH_BANNER_HEIGHT_PX = 40;
 
-  // Resize window to fit content
+  // Resize window for onboarding view
   useEffect(() => {
+    if (onboardingComplete === false) {
+      getCurrentWindow().setSize(new LogicalSize(340, 420)).catch(() => {});
+    }
+  }, [onboardingComplete]);
+
+  // Resize window to fit content (main widget only)
+  useEffect(() => {
+    if (!onboardingComplete) return;
     const win = getCurrentWindow();
     const authBannerHeight = authError ? AUTH_BANNER_HEIGHT_PX : 0;
     let height: number;
@@ -224,7 +232,7 @@ export default function App() {
       height = 283 + authBannerHeight;
     }
     win.setSize(new LogicalSize(340, height)).catch(() => {});
-  }, [expanded, showTray, isSleeping, usage?.isStale, usageError, authError]);
+  }, [expanded, showTray, isSleeping, usage?.isStale, usageError, authError, onboardingComplete]);
 
   // Drag from header
   const handleDragStart = useCallback((e: React.MouseEvent) => {

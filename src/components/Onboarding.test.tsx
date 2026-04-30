@@ -19,6 +19,10 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // ── Mock Tauri internals before any component import ──────────────────────────
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     hide: vi.fn().mockResolvedValue(undefined),

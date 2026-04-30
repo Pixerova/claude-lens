@@ -5,7 +5,12 @@
  * JSON parsing, and error normalisation.
  */
 
+import { invoke } from "@tauri-apps/api/core";
+
 const BASE_URL = "http://127.0.0.1:8765";
+
+// Cached once resolved — avoids a Tauri invoke on every re-mount (e.g. StrictMode).
+let _onboardingComplete: boolean | null = null;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -204,13 +209,19 @@ export const api = {
     });
   },
 
-  /** Check whether first-launch onboarding has been completed. */
+  /** Check whether first-launch onboarding has been completed (reads config.json directly via Tauri). */
   getOnboardingStatus(): Promise<OnboardingStatus> {
-    return sidecarFetch<OnboardingStatus>("/onboarding/status");
+    if (_onboardingComplete !== null) return Promise.resolve({ complete: _onboardingComplete });
+    return invoke<boolean>("get_onboarding_complete").then(complete => {
+      _onboardingComplete = complete;
+      return { complete };
+    });
   },
 
-  /** Mark onboarding as complete and write the flag to config.json. */
+  /** Mark onboarding as complete and write the flag to config.json via Tauri. */
   completeOnboarding(): Promise<void> {
-    return sidecarFetch<void>("/onboarding/complete", { method: "POST" });
+    return invoke<void>("set_onboarding_complete").then(() => {
+      _onboardingComplete = true;
+    });
   },
 };

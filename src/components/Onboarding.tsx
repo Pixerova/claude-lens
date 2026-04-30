@@ -69,13 +69,13 @@ const KeychainStep: React.FC<KeychainStepProps> = ({ onSuccess }) => {
         <p className="text-[15px] font-bold text-white tracking-[-0.01em]">
           Keychain Access
         </p>
-        <p className="font-mono text-[10px] text-white/50 mt-1 leading-relaxed">
+        <p className="font-mono text-[10px] text-white mt-1 leading-relaxed">
           Step 1 of 2
         </p>
       </div>
 
       {/* Explanation */}
-      <p className="text-[11px] text-white/70 leading-relaxed text-center px-1">
+      <p className="text-[11px] text-white leading-relaxed text-center px-1">
         Claude Lens reads your plan limits directly from the Anthropic API using
         the OAuth token that Claude Code already stored in your macOS Keychain.
         No passwords, no sign-in — just a one-time permission prompt from macOS.
@@ -110,7 +110,7 @@ const KeychainStep: React.FC<KeychainStepProps> = ({ onSuccess }) => {
 
       {/* Skip note */}
       {(state === "idle" || state === "error") && (
-        <p className="text-center font-mono text-[9px] text-white/30 leading-relaxed">
+        <p className="text-center font-mono text-[9px] text-white/90 leading-relaxed">
           If access is denied, the widget will still work using cached data.
         </p>
       )}
@@ -178,7 +178,7 @@ const ReadyStep: React.FC<ReadyStepProps> = ({ onComplete }) => {
         <p className="text-[15px] font-bold text-white tracking-[-0.01em]">
           All set
         </p>
-        <p className="font-mono text-[10px] text-white/50 mt-1 leading-relaxed">
+        <p className="font-mono text-[10px] text-white mt-1 leading-relaxed">
           Step 2 of 2 — First live reading
         </p>
       </div>
@@ -198,30 +198,30 @@ const ReadyStep: React.FC<ReadyStepProps> = ({ onComplete }) => {
         <div className="grid grid-cols-2 gap-2">
           {/* Session tile */}
           <div className="rounded-[9px] bg-white/[0.06] border border-white/[0.08] p-3 flex flex-col gap-1">
-            <p className="font-mono text-[8px] font-bold text-white/50 uppercase tracking-[0.08em]">Session</p>
+            <p className="font-mono text-[8px] font-bold text-white uppercase tracking-[0.08em]">Session</p>
             <p className="font-mono text-[22px] font-black text-white leading-none">
               {fmt(usage.sessionPct)}
             </p>
-            <p className="font-mono text-[8px] text-white/40">used</p>
+            <p className="font-mono text-[8px] text-white">used</p>
           </div>
           {/* Weekly tile */}
           <div className="rounded-[9px] bg-white/[0.06] border border-white/[0.08] p-3 flex flex-col gap-1">
-            <p className="font-mono text-[8px] font-bold text-white/50 uppercase tracking-[0.08em]">Weekly</p>
+            <p className="font-mono text-[8px] font-bold text-white uppercase tracking-[0.08em]">Weekly</p>
             <p className="font-mono text-[22px] font-black text-white leading-none">
               {fmt(usage.weeklyPct)}
             </p>
-            <p className="font-mono text-[8px] text-white/40">used</p>
+            <p className="font-mono text-[8px] text-white">used</p>
           </div>
         </div>
       ) : (
-        <p className="font-mono text-[10px] text-white/40 text-center">
+        <p className="font-mono text-[10px] text-white text-center">
           Usage data will appear once the sidecar is running.
         </p>
       )}
 
       {/* Session count */}
       {sessionCount !== null && sessionCount > 0 && (
-        <p className="font-mono text-[10px] text-white/50 text-center">
+        <p className="font-mono text-[10px] text-white text-center">
           {sessionCount} local session{sessionCount !== 1 ? "s" : ""} found from the last 7 days
         </p>
       )}
@@ -232,7 +232,7 @@ const ReadyStep: React.FC<ReadyStepProps> = ({ onComplete }) => {
         disabled={completing}
         className="w-full py-[10px] rounded-[9px] font-mono text-[11px] font-bold tracking-[0.06em] text-white bg-[#1e3a5f] border border-[#2979ff]/40 hover:bg-[#244876] transition-colors disabled:opacity-50 cursor-pointer"
       >
-        {completing ? "Opening…" : "Open Claude Lens →"}
+        {completing ? "Opening…" : "Start claude-lens →"}
       </button>
     </div>
   );
@@ -256,7 +256,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           <span className="text-[12px] font-semibold text-white flex-1 tracking-[-0.01em]">
             claude-lens
           </span>
-          <span className="font-mono text-[9px] text-white/30">setup</span>
+          <span className="font-mono text-[9px] text-white">setup</span>
         </div>
 
         {/* Step content */}
