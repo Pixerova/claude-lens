@@ -10,6 +10,9 @@ import { invoke } from "@tauri-apps/api/core";
 const BASE_URL = "http://127.0.0.1:8765";
 
 // Cached once resolved — avoids a Tauri invoke on every re-mount (e.g. StrictMode).
+// In tests, spy on api.getOnboardingStatus / api.completeOnboarding directly rather
+// than relying on invoke mocks: this variable persists across test cases within the
+// same module instance and will short-circuit the real implementation.
 let _onboardingComplete: boolean | null = null;
 
 // ── Types ─────────────────────────────────────────────────────────────────────

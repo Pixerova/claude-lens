@@ -168,8 +168,9 @@ class _SuppressOptions(logging.Filter):
 async def lifespan(app: FastAPI):
     global _config, _poller, _poller_task, _watcher, _all_suggestions, _suggestions_yaml_error
 
-    # Suppress OPTIONS preflight noise — installed here (after uvicorn configures
-    # its loggers) so dictConfig during startup doesn't clear the filter.
+    # Suppress all OPTIONS preflight requests from the access log (intentionally
+    # broad — every endpoint). Installed here so uvicorn's dictConfig during
+    # startup doesn't clear the filter before it takes effect.
     logging.getLogger("uvicorn.access").addFilter(_SuppressOptions())
 
     # 1. Config

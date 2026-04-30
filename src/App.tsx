@@ -216,7 +216,7 @@ export default function App() {
 
   // Resize window to fit content (main widget only)
   useEffect(() => {
-    if (!onboardingComplete) return;
+    if (onboardingComplete !== true) return;
     const win = getCurrentWindow();
     const authBannerHeight = authError ? AUTH_BANNER_HEIGHT_PX : 0;
     let height: number;

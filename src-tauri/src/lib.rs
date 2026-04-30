@@ -65,7 +65,7 @@ fn set_onboarding_complete() -> Result<(), String> {
         .unwrap_or(serde_json::json!({}));
     config["onboardingComplete"] = serde_json::Value::Bool(true);
     let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
-    let tmp = path.with_file_name(".config_tmp");
+    let tmp = path.with_extension("tmp");
     fs::write(&tmp, &json).map_err(|e| e.to_string())?;
     fs::rename(&tmp, &path).map_err(|e| {
         let _ = fs::remove_file(&tmp);

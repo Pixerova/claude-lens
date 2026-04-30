@@ -6,7 +6,7 @@
  *   Step 1 (Keychain) — renders "Grant Access" button; on success transitions
  *     to Step 2; on failure shows the Retry button and an error note.
  *
- *   Step 2 (Ready) — fetches live plan data on mount; "Open Claude Lens" button
+ *   Step 2 (Ready) — fetches live plan data on mount; "Start claude-lens" button
  *     calls completeOnboarding() and then the onComplete prop.
  *
  * Tauri window APIs are mocked at module level (jsdom has no __TAURI_INTERNALS__).
@@ -218,17 +218,17 @@ describe("Onboarding — Step 2 (Ready)", () => {
     });
   });
 
-  it("renders the Open Claude Lens button", async () => {
+  it("renders the Start claude-lens button", async () => {
     await renderOnStep2();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /open claude lens/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /start claude-lens/i })).toBeTruthy();
     });
   });
 
-  it("calls completeOnboarding when Open Claude Lens is clicked", async () => {
+  it("calls completeOnboarding when Start claude-lens is clicked", async () => {
     const { onComplete } = await renderOnStep2();
-    await waitFor(() => screen.getByRole("button", { name: /open claude lens/i }));
-    fireEvent.click(screen.getByRole("button", { name: /open claude lens/i }));
+    await waitFor(() => screen.getByRole("button", { name: /start claude-lens/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start claude-lens/i }));
     await waitFor(() => {
       expect(apiModule.api.completeOnboarding).toHaveBeenCalledTimes(1);
     });
@@ -237,8 +237,8 @@ describe("Onboarding — Step 2 (Ready)", () => {
   it("calls onComplete prop after completeOnboarding resolves", async () => {
     const onComplete = vi.fn();
     await renderOnStep2(onComplete);
-    await waitFor(() => screen.getByRole("button", { name: /open claude lens/i }));
-    fireEvent.click(screen.getByRole("button", { name: /open claude lens/i }));
+    await waitFor(() => screen.getByRole("button", { name: /start claude-lens/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start claude-lens/i }));
     await waitFor(() => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
@@ -250,8 +250,8 @@ describe("Onboarding — Step 2 (Ready)", () => {
     );
     const onComplete = vi.fn();
     await renderOnStep2(onComplete);
-    await waitFor(() => screen.getByRole("button", { name: /open claude lens/i }));
-    fireEvent.click(screen.getByRole("button", { name: /open claude lens/i }));
+    await waitFor(() => screen.getByRole("button", { name: /start claude-lens/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start claude-lens/i }));
     // onComplete must fire even on write failure — widget opens regardless
     await waitFor(() => {
       expect(onComplete).toHaveBeenCalledTimes(1);
@@ -263,9 +263,9 @@ describe("Onboarding — Step 2 (Ready)", () => {
       new Error("sidecar unreachable")
     );
     await renderOnStep2();
-    // Should not throw — usage tiles absent but Open button still present
+    // Should not throw — usage tiles absent but Start button still present
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /open claude lens/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /start claude-lens/i })).toBeTruthy();
     });
   });
 });

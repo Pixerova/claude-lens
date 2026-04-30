@@ -166,7 +166,7 @@ describe("App — onboarding gate", () => {
       screen.getByRole("button", { name: /grant access/i })
     );
 
-    // Simulate getAuthStatus success → step 2 → click Open
+    // Simulate getAuthStatus success → step 2 → click Start
     vi.spyOn(apiModule.api, "getAuthStatus").mockResolvedValue(AUTH_OK);
 
     // Fast-forward through the keychain step
@@ -176,7 +176,7 @@ describe("App — onboarding gate", () => {
     // Step 2 should appear (after the 600 ms success delay)
     await waitFor(() => screen.getByText(/all set/i), { timeout: 2000 });
 
-    const openBtn = screen.getByRole("button", { name: /open claude lens/i });
+    const openBtn = screen.getByRole("button", { name: /start claude-lens/i });
     openBtn.click();
 
     // Main widget should replace the onboarding screen
