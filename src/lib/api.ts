@@ -1,5 +1,5 @@
 /**
- * api.ts — Typed client for the Claude Lens Python sidecar (localhost:8765).
+ * api.ts — Typed client for the claude-lens Python sidecar (localhost:8765).
  *
  * All fetch calls go through `sidecarFetch` which handles the base URL,
  * JSON parsing, and error normalisation.

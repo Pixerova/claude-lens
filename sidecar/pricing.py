@@ -6,7 +6,7 @@ Cache reads are billed at 10% of input price.
 Cache writes are billed at 125% of input price.
 
 To override pricing (e.g. when Anthropic changes rates), add a "pricing" key
-to ~/.claudelens/config.json:
+to ~/.claude-lens/config.json:
 
   "pricing": {
     "claude-sonnet-4-6": { "input": 3.00, "output": 15.00 }

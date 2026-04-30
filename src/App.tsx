@@ -1,5 +1,5 @@
 /**
- * App.tsx — Claude Lens floating widget root.
+ * App.tsx — claude-lens floating widget root.
  *
  * Two views:
  *  • Collapsed — 2×2 tile grid (session, weekly, expand, suggest)

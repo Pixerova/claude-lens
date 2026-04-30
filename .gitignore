@@ -11,6 +11,7 @@ build/
 # PyInstaller
 sidecar/dist/
 sidecar/build/
+sidecar/*.spec
 
 # Pre-built sidecar binaries (build locally via scripts/build-sidecar.sh)
 src-tauri/binaries/
@@ -38,6 +39,6 @@ node_modules/
 # Claude Code local project files
 .claude/
 
-# Claude Lens runtime data (lives in ~/.claudelens/, not in repo)
+# claude-lens runtime data (lives in ~/.claude-lens/, not in repo)
 *.db
 state.json

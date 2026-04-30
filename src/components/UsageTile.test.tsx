@@ -6,8 +6,7 @@
  * SleepIndicator which are rendered alongside tiles in the app.
  */
 
-import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { UsageTile } from "./UsageTile";
 import { StaleIndicator } from "./StaleIndicator";

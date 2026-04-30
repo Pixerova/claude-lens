@@ -1,8 +1,8 @@
 /**
- * Onboarding.tsx — First-launch setup flow for Claude Lens.
+ * Onboarding.tsx — First-launch setup flow for claude-lens.
  *
  * Shown once, before the main widget, when onboardingComplete is absent from
- * ~/.claudelens/config.json. Two steps:
+ * ~/.claude-lens/config.json. Two steps:
  *
  *   Step 1 — Keychain access:
  *     Explain what the app needs and why, then let the user grant access.
@@ -76,7 +76,7 @@ const KeychainStep: React.FC<KeychainStepProps> = ({ onSuccess }) => {
 
       {/* Explanation */}
       <p className="text-[11px] text-white leading-relaxed text-center px-1">
-        Claude Lens reads your plan limits directly from the Anthropic API using
+        claude-lens reads your plan limits directly from the Anthropic API using
         the OAuth token that Claude Code already stored in your macOS Keychain.
         No passwords, no sign-in — just a one-time permission prompt from macOS.
       </p>

@@ -12,7 +12,6 @@
  * jsdom has no window.__TAURI_INTERNALS__.
  */
 
-import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Claude Lens",
+  "productName": "claude-lens",
   "version": "0.1.0",
-  "identifier": "com.claudelens.app",
+  "identifier": "com.pixerova.claude-lens",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Claude Lens",
+        "title": "claude-lens",
         "width": 340,
         "height": 200,
         "resizable": true,
@@ -43,7 +43,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/sidecar"
+      "binaries/claude-lens-sidecar"
     ],
     "macOS": {
       "entitlements": "entitlements.plist",

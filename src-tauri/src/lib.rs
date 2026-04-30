@@ -1,4 +1,4 @@
-// lib.rs — Claude Lens Tauri shell
+// lib.rs — claude-lens Tauri shell
 //
 // Zero custom Rust. All logic lives in the Python sidecar.
 // This file handles:
@@ -33,17 +33,17 @@ fn open_claude_app() -> Result<(), String> {
 
 // ── Config helpers ────────────────────────────────────────────────────────────
 
-fn claudelens_config_path() -> PathBuf {
+fn claude_lens_config_path() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default()
-        .join(".claudelens")
+        .join(".claude-lens")
         .join("config.json")
 }
 
 #[tauri::command]
 fn get_onboarding_complete() -> bool {
-    let path = claudelens_config_path();
+    let path = claude_lens_config_path();
     let Ok(text) = fs::read_to_string(&path) else { return false; };
     serde_json::from_str::<serde_json::Value>(&text)
         .ok()
@@ -53,7 +53,7 @@ fn get_onboarding_complete() -> bool {
 
 #[tauri::command]
 fn set_onboarding_complete() -> Result<(), String> {
-    let path = claudelens_config_path();
+    let path = claude_lens_config_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -79,9 +79,9 @@ fn set_onboarding_complete() -> Result<(), String> {
 fn start_sidecar(app: &AppHandle) {
     use tauri_plugin_shell::ShellExt;
     let shell = app.shell();
-    // The sidecar binary is bundled at binaries/sidecar (configured in tauri.conf.json).
+    // The sidecar binary is bundled at binaries/claude-lens-sidecar (configured in tauri.conf.json).
     // In dev mode we spawn the Python process directly instead (see DEVSETUP.md).
-    match shell.sidecar("sidecar") {
+    match shell.sidecar("claude-lens-sidecar") {
         Ok(cmd) => {
             match cmd.spawn() {
                 Ok((mut rx, child)) => {
@@ -155,7 +155,7 @@ pub fn run() {
             TrayIconBuilder::new()
                 .icon(tray_icon)
                 .icon_as_template(true)
-                .tooltip("Claude Lens")
+                .tooltip("claude-lens")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_window(app),
@@ -185,7 +185,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building Claude Lens")
+        .expect("error while building claude-lens")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 if let Some(handle) = app.try_state::<SidecarHandle>() {

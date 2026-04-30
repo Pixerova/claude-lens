@@ -69,7 +69,7 @@ def evaluate_triggers(
         weekly_resets:      ISO 8601 UTC string of the next weekly reset.
         prior_weekly_pct:   Weekly utilisation from the previous poll reading.
         prior_recorded_at:  ISO 8601 UTC timestamp of the previous reading.
-        config:             Loaded config dict (from ~/.claudelens/config.json).
+        config:             Loaded config dict (from ~/.claude-lens/config.json).
 
     Returns:
         Set of active trigger type strings, e.g. {"always", "low_utilization_eow"}.

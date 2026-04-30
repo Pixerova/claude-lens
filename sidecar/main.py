@@ -1,5 +1,5 @@
 """
-main.py — FastAPI sidecar entry point for Claude Lens.
+main.py — FastAPI sidecar entry point for claude-lens.
 
 Starts on http://localhost:8765
 Exposes data endpoints consumed by the Tauri frontend.
@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-CONFIG_PATH = Path.home() / ".claudelens" / "config.json"
+CONFIG_PATH = Path.home() / ".claude-lens" / "config.json"
 
 DEFAULT_CONFIG = {
     "hotkey": "Option+Space",
@@ -231,7 +231,7 @@ async def lifespan(app: FastAPI):
         if _dir.exists():
             _watcher.schedule(_activity_monitor, str(_dir), recursive=True)
 
-    log.info("Claude Lens sidecar started on http://localhost:8765")
+    log.info("claude-lens sidecar started on http://localhost:8765")
     yield
 
     # Shutdown
@@ -246,12 +246,12 @@ async def lifespan(app: FastAPI):
     if _watcher:
         _watcher.stop()
         _watcher.join()
-    log.info("Claude Lens sidecar stopped")
+    log.info("claude-lens sidecar stopped")
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Claude Lens Sidecar", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="claude-lens sidecar", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

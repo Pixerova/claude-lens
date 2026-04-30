@@ -2,7 +2,7 @@
 # scripts/build_sidecar.sh — Compile the Python sidecar into a standalone binary.
 #
 # Uses PyInstaller to produce a single-file binary at the path Tauri expects:
-#   src-tauri/binaries/sidecar-<target-triple>
+#   src-tauri/binaries/claude-lens-sidecar-<target-triple>
 #
 # Run this:
 #   - Before your first `npm run tauri build` on a new machine
@@ -62,14 +62,14 @@ fi
 
 # ── Compile ───────────────────────────────────────────────────────────────────
 
-echo "Compiling sidecar/main.py → src-tauri/binaries/sidecar-$TRIPLE ..."
+echo "Compiling sidecar/main.py → src-tauri/binaries/claude-lens-sidecar-$TRIPLE ..."
 
 mkdir -p "$BINARIES_DIR"
 cd "$SIDECAR_DIR"
 
 if ! "$VENV/bin/pyinstaller" \
         --onefile \
-        --name sidecar \
+        --name claude-lens-sidecar \
         --distpath dist \
         --clean \
         --noconfirm \
@@ -84,10 +84,10 @@ fi
 
 # ── Copy to Tauri binaries dir ────────────────────────────────────────────────
 
-DEST="$BINARIES_DIR/sidecar-$TRIPLE"
-cp dist/sidecar "$DEST"
+DEST="$BINARIES_DIR/claude-lens-sidecar-$TRIPLE"
+cp "dist/claude-lens-sidecar" "$DEST"
 
 echo ""
-echo "Binary written to: src-tauri/binaries/sidecar-$TRIPLE"
+echo "Binary written to: src-tauri/binaries/claude-lens-sidecar-$TRIPLE"
 echo ""
 echo "You can now run: npm run tauri build"

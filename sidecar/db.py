@@ -1,7 +1,7 @@
 """
 db.py — SQLite database setup, schema, and core write helpers.
 
-Database lives at ~/.claudelens/claudelens.db
+Database lives at ~/.claude-lens/claudelens.db
 Tables:
   - plan_usage_snapshots  : one row per OAuth API poll result
   - session_summaries     : one row per local Claude Code / Cowork session
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-DATA_DIR = Path.home() / ".claudelens"
+DATA_DIR = Path.home() / ".claude-lens"
 DB_PATH  = DATA_DIR / "claudelens.db"
 
 
@@ -113,7 +113,7 @@ def _reset_if_schema_changed(conn: sqlite3.Connection) -> None:
     """Drop all tables and recreate if the schema has changed since last run.
 
     Compares a hash of the SCHEMA constant against the value persisted in
-    ~/.claudelens/schema.hash.  On mismatch (or first run), all tables are
+    ~/.claude-lens/schema.hash.  On mismatch (or first run), all tables are
     dropped so init_db() can recreate them from the current SCHEMA.
 
     This replaces the ALTER TABLE migration approach during development.

@@ -7,7 +7,7 @@ Loads and merges suggestion definitions from two sources:
      Always read directly on every launch — never copied to the user directory.
      Updates, removals, and additions propagate automatically.
 
-  2. Custom suggestions (~/.claudelens/custom_suggestions.yaml):
+  2. Custom suggestions (~/.claude-lens/custom_suggestions.yaml):
      Bootstrapped from a template on first launch; never overwritten by the app.
      All entries must have ids and categories prefixed with 'custom_'.
 
@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 
 _BUNDLED_YAML = Path(__file__).parent / "data" / "suggestions.yaml"
 _CUSTOM_TEMPLATE = Path(__file__).parent / "data" / "custom_suggestions_template.yaml"
-_CUSTOM_YAML = Path.home() / ".claudelens" / "custom_suggestions.yaml"
+_CUSTOM_YAML = Path.home() / ".claude-lens" / "custom_suggestions.yaml"
 
 VALID_CATEGORIES = {
     "code_health",
