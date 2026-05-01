@@ -181,7 +181,9 @@ describe("useUsage polling chain", () => {
   });
 
   it("falls back to cached data silently when refresh returns 429", async () => {
-    vi.spyOn(apiModule.api, "getUsageCurrent").mockResolvedValue(freshSnapshot);
+    const getCurrent = vi
+      .spyOn(apiModule.api, "getUsageCurrent")
+      .mockResolvedValue(freshSnapshot);
     vi.spyOn(apiModule.api, "refreshUsage").mockRejectedValue(
       new Error("Sidecar 429: Rate limited — retry after 60s")
     );
@@ -195,5 +197,12 @@ describe("useUsage polling chain", () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.usage).not.toBeNull();
+    // 1 initial fetch + 1 fallback call from the 429 handler
+    expect(getCurrent).toHaveBeenCalledTimes(2);
+
+    // Poll chain must still be alive after the 429 fallback.
+    await tick(300 * 1000 + 100);
+    // 1 initial + 1 fallback + 1 auto-poll = 3 total
+    expect(getCurrent).toHaveBeenCalledTimes(3);
   });
 });

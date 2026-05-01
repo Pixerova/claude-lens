@@ -259,6 +259,7 @@ async def test_usage_refresh_rate_limited_returns_429(isolated_db):
         resp = await client.post("/usage/refresh")
     assert resp.status_code == 429
     assert resp.headers.get("retry-after") == "60"
+    assert "retry" in resp.json().get("detail", "").lower()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
