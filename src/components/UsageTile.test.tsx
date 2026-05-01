@@ -13,20 +13,21 @@ import { StaleIndicator } from "./StaleIndicator";
 import { SleepIndicator } from "./SleepIndicator";
 
 const FUTURE_RESET = "2099-01-01T00:00:00Z";
+const THRESHOLDS = { warnAt: 0.80, critAt: 0.90 };
 
 // ── UsageTile ─────────────────────────────────────────────────────────────────
 
 describe("UsageTile", () => {
   it("renders session percentage text correctly", () => {
     const { container } = render(
-      <UsageTile type="session" pct={0.45} resetsAt={FUTURE_RESET} />
+      <UsageTile type="session" pct={0.45} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     expect(container.textContent).toContain("45%");
   });
 
   it("renders weekly percentage text correctly", () => {
     const { container } = render(
-      <UsageTile type="weekly" pct={0.30} resetsAt={FUTURE_RESET} />
+      <UsageTile type="weekly" pct={0.30} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     expect(container.textContent).toContain("30%");
   });
@@ -35,7 +36,7 @@ describe("UsageTile", () => {
 
   it("applies normal CSS class at 79% — no warning", () => {
     const { container } = render(
-      <UsageTile type="session" pct={0.79} resetsAt={FUTURE_RESET} />
+      <UsageTile type="session" pct={0.79} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("bg-tile-sess-norm");
@@ -45,7 +46,7 @@ describe("UsageTile", () => {
 
   it("applies warning CSS class at exactly 80%", () => {
     const { container } = render(
-      <UsageTile type="session" pct={0.80} resetsAt={FUTURE_RESET} />
+      <UsageTile type="session" pct={0.80} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("bg-tile-sess-warn");
@@ -55,7 +56,7 @@ describe("UsageTile", () => {
 
   it("applies critical CSS class at exactly 90%", () => {
     const { container } = render(
-      <UsageTile type="session" pct={0.90} resetsAt={FUTURE_RESET} />
+      <UsageTile type="session" pct={0.90} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("bg-tile-sess-crit");
@@ -65,7 +66,7 @@ describe("UsageTile", () => {
 
   it("adds animate-flash class at exactly 90% (critical pulse)", () => {
     const { container } = render(
-      <UsageTile type="session" pct={0.90} resetsAt={FUTURE_RESET} />
+      <UsageTile type="session" pct={0.90} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("animate-flash");
@@ -73,7 +74,7 @@ describe("UsageTile", () => {
 
   it("does NOT add animate-flash below 90%", () => {
     const { container } = render(
-      <UsageTile type="session" pct={0.89} resetsAt={FUTURE_RESET} />
+      <UsageTile type="session" pct={0.89} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).not.toContain("animate-flash");
@@ -81,7 +82,7 @@ describe("UsageTile", () => {
 
   it("uses weekly-specific CSS classes for type=weekly", () => {
     const { container } = render(
-      <UsageTile type="weekly" pct={0.80} resetsAt={FUTURE_RESET} />
+      <UsageTile type="weekly" pct={0.80} resetsAt={FUTURE_RESET} {...THRESHOLDS} />
     );
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("bg-tile-week-warn");

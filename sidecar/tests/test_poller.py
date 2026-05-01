@@ -23,10 +23,14 @@ from poller import (
     _parse_hhmm,
     load_state,
     save_state,
-    DEFAULT_THRESHOLDS,
     RATE_LIMIT_BACKOFF_MIN_SEC,
     SLEEP_INTERVAL_SEC,
 )
+
+# Mirrors DEFAULT_CONFIG poll thresholds — single source of truth is main.py
+TEST_THRESHOLDS: list[tuple[float, int]] = [
+    (0.90, 60), (0.80, 120), (0.60, 300), (0.20, 600), (0.05, 1800), (0.00, 3600),
+]
 
 
 # ── compute_interval ──────────────────────────────────────────────────────────
@@ -35,22 +39,22 @@ class TestComputeInterval:
     """The interval is driven by session_pct only."""
 
     @pytest.mark.parametrize("session,weekly,expected", [
-        (0.95, 0.10, 30),    # session critical → 30s
+        (0.95, 0.10, 60),    # session critical → 60s
         (0.10, 0.92, 1800),  # weekly high but session low → session wins
-        (0.85, 0.10, 60),    # high             → 60s
-        (0.65, 0.10, 120),   # elevated         → 120s
-        (0.30, 0.25, 300),   # normal           → 300s
+        (0.85, 0.10, 120),   # high             → 120s
+        (0.65, 0.10, 300),   # elevated         → 300s
+        (0.30, 0.25, 600),   # normal           → 600s
         (0.08, 0.07, 1800),  # low              → 1800s
         (0.03, 0.02, 3600),  # minimal          → 3600s
         (0.00, 0.00, 3600),  # zero usage       → 3600s
     ])
     def test_correct_interval_for_utilisation(self, session, weekly, expected):
-        assert compute_interval(session, weekly) == expected
+        assert compute_interval(session, weekly, TEST_THRESHOLDS) == expected
 
     def test_weekly_does_not_drive_interval(self):
         # High weekly, low session — interval should reflect session only
-        assert compute_interval(0.05, 0.91) == 1800
-        assert compute_interval(0.91, 0.05) == 30
+        assert compute_interval(0.05, 0.91, TEST_THRESHOLDS) == 1800
+        assert compute_interval(0.91, 0.05, TEST_THRESHOLDS) == 60
 
     def test_custom_thresholds_are_respected(self):
         custom = [(0.50, 10), (0.00, 999)]
@@ -59,9 +63,9 @@ class TestComputeInterval:
 
     def test_exactly_at_threshold_boundary(self):
         # 0.90 exactly should hit the "critical" tier
-        assert compute_interval(0.90, 0.00) == 30
+        assert compute_interval(0.90, 0.00, TEST_THRESHOLDS) == 60
         # Just below 0.90 should hit "high"
-        assert compute_interval(0.899, 0.00) == 60
+        assert compute_interval(0.899, 0.00, TEST_THRESHOLDS) == 120
 
 
 # ── _effective_interval ───────────────────────────────────────────────────────
@@ -78,8 +82,8 @@ class TestEffectiveInterval:
             weekly_resets_at="",
             recorded_at="",
         )
-        interval = _effective_interval(snap)
-        # Should be close to 3700, not the 30s critical-tier interval
+        interval = _effective_interval(snap, TEST_THRESHOLDS)
+        # Should be close to 3700, not the 60s critical-tier interval
         assert interval > 3600
         assert interval <= 3700
 
@@ -93,7 +97,7 @@ class TestEffectiveInterval:
             weekly_resets_at="",
             recorded_at="",
         )
-        interval = _effective_interval(snap)
+        interval = _effective_interval(snap, TEST_THRESHOLDS)
         assert interval > 1700
         assert interval <= 1800
 
@@ -106,8 +110,8 @@ class TestEffectiveInterval:
             weekly_resets_at="",
             recorded_at="",
         )
-        # Reset already passed — fall back to normal interval for 100% (30s tier)
-        assert _effective_interval(snap) == 30
+        # Reset already passed — fall back to normal interval for 100% (60s critical tier)
+        assert _effective_interval(snap, TEST_THRESHOLDS) == 60
 
     def test_at_100pct_with_missing_reset_falls_back(self):
         snap = UsageSnapshot(
@@ -117,7 +121,7 @@ class TestEffectiveInterval:
             weekly_resets_at="",
             recorded_at="",
         )
-        assert _effective_interval(snap) == 30
+        assert _effective_interval(snap, TEST_THRESHOLDS) == 60
 
     def test_at_100pct_with_malformed_reset_falls_back(self):
         snap = UsageSnapshot(
@@ -127,7 +131,7 @@ class TestEffectiveInterval:
             weekly_resets_at="",
             recorded_at="",
         )
-        assert _effective_interval(snap) == 30
+        assert _effective_interval(snap, TEST_THRESHOLDS) == 60
 
     def test_below_100pct_delegates_to_compute_interval(self):
         snap = UsageSnapshot(
@@ -137,7 +141,7 @@ class TestEffectiveInterval:
             weekly_resets_at="",
             recorded_at="",
         )
-        assert _effective_interval(snap) == compute_interval(0.95, 0.10)
+        assert _effective_interval(snap, TEST_THRESHOLDS) == compute_interval(0.95, 0.10, TEST_THRESHOLDS)
 
     def test_z_suffix_iso_string_parsed_correctly(self):
         future = datetime.now(timezone.utc) + timedelta(seconds=500)
@@ -150,7 +154,7 @@ class TestEffectiveInterval:
             weekly_resets_at="",
             recorded_at="",
         )
-        interval = _effective_interval(snap)
+        interval = _effective_interval(snap, TEST_THRESHOLDS)
         assert 0 < interval <= 500
 
 
@@ -233,13 +237,13 @@ class TestUsageSnapshot:
 class TestUsagePoller:
 
     def test_initial_current_is_none_when_no_state(self, isolated_state, isolated_db):
-        p = poller.UsagePoller()
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
         assert p.current is None
 
     def test_initial_current_loaded_from_state(self, isolated_state, isolated_db):
         snap = make_usage_snapshot()
         save_state(snap, interval_sec=300)
-        p = poller.UsagePoller()
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
         assert p.current is not None
         assert abs(p.current.session_pct - 0.30) < 1e-6
 
@@ -250,7 +254,7 @@ class TestUsagePoller:
              patch("poller.fetch_usage", new_callable=AsyncMock, return_value=snap), \
              patch("poller.store_snapshot"), \
              patch("poller.save_state"):
-            p = poller.UsagePoller()
+            p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
             result = await p.force_refresh()
         assert result is not None
         assert abs(result.session_pct - 0.30) < 1e-6
@@ -258,7 +262,7 @@ class TestUsagePoller:
     @pytest.mark.asyncio
     async def test_force_refresh_returns_none_when_no_token(self, isolated_state, isolated_db):
         with patch("poller.get_oauth_token", return_value=None):
-            p = poller.UsagePoller()
+            p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
             result = await p.force_refresh()
         assert result is None
 
@@ -266,21 +270,9 @@ class TestUsagePoller:
     async def test_force_refresh_returns_none_on_api_failure(self, isolated_state, isolated_db):
         with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
              patch("poller.fetch_usage", new_callable=AsyncMock, return_value=None):
-            p = poller.UsagePoller()
+            p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
             result = await p.force_refresh()
         assert result is None
-
-    def test_on_update_callback_is_called(self, isolated_state, isolated_db):
-        """Verify the callback mechanism wires up correctly (sync check)."""
-        received = []
-        p = poller.UsagePoller(on_update=lambda s: received.append(s))
-        snap = make_usage_snapshot()
-        # Simulate what the run loop does after a successful fetch
-        p._current = snap
-        if p._on_update:
-            p._on_update(snap)
-        assert len(received) == 1
-        assert received[0].session_pct == 0.30
 
 
 # ── fetch_usage (mocked HTTP) ─────────────────────────────────────────────────
@@ -370,7 +362,7 @@ class TestFetchUsage:
     ):
         """Run loop must wait at least RATE_LIMIT_BACKOFF_MIN_SEC even if Retry-After is 0."""
         snap = make_usage_snapshot()
-        p = poller.UsagePoller()
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
         p._current = snap
 
         sleep_args = []
@@ -442,14 +434,14 @@ class TestFetchUsage:
 class TestAuthErrorFlag:
 
     def test_auth_error_false_by_default(self, isolated_state, isolated_db):
-        p = poller.UsagePoller()
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
         assert p.auth_error is False
 
     @pytest.mark.asyncio
     async def test_force_refresh_sets_auth_error_on_401(self, isolated_state, isolated_db):
         with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
              patch("poller.fetch_usage", new_callable=AsyncMock, side_effect=AuthError()):
-            p = poller.UsagePoller()
+            p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
             result = await p.force_refresh()
         assert result is None
         assert p.auth_error is True
@@ -459,7 +451,7 @@ class TestAuthErrorFlag:
         snap = make_usage_snapshot()
         with patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
              patch("poller.fetch_usage", new_callable=AsyncMock, side_effect=AuthError()):
-            p = poller.UsagePoller()
+            p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
             await p.force_refresh()
         assert p.auth_error is True
 
@@ -474,7 +466,7 @@ class TestAuthErrorFlag:
     @pytest.mark.asyncio
     async def test_run_loop_auth_error_sets_and_clears_flag(self, isolated_state, isolated_db):
         snap = make_usage_snapshot()
-        p = poller.UsagePoller()
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
         p._current = snap  # give the poller a current snapshot so staleness can be checked
 
         states_before_success = []
@@ -577,25 +569,25 @@ class TestIsInWorkingHours:
 class TestUsagePollerWorkingHours:
 
     def test_is_sleeping_false_when_not_configured(self, isolated_state, isolated_db):
-        p = poller.UsagePoller()
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
         assert p.is_sleeping is False
 
     def test_active_until_is_none_without_working_hours(self, isolated_state, isolated_db):
-        p = poller.UsagePoller()
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS)
         assert p.active_until is None
 
     def test_active_until_exposed_when_configured(self, isolated_state, isolated_db):
-        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS, working_hours={"start": "09:00", "end": "17:00"})
         assert p.active_until is not None
 
     def test_extend_active_window_bumps_active_until(self, isolated_state, isolated_db):
-        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS, working_hours={"start": "09:00", "end": "17:00"})
         before = p.active_until
         p.extend_active_window()
         assert p.active_until > before
 
     def test_extend_does_not_reduce_active_until(self, isolated_state, isolated_db):
-        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS, working_hours={"start": "09:00", "end": "17:00"})
         far_future = datetime.now(timezone.utc) + timedelta(hours=5)
         with p._wh_lock:
             p._active_until = far_future
@@ -603,7 +595,7 @@ class TestUsagePollerWorkingHours:
         assert p.active_until == far_future
 
     def test_invalid_working_hours_disables_sleep(self, isolated_state, isolated_db):
-        p = poller.UsagePoller(working_hours={"start": "bad", "end": "data"})
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS, working_hours={"start": "bad", "end": "data"})
         assert p.is_sleeping is False
         assert p.active_until is None
 
@@ -619,7 +611,7 @@ class TestUsagePollerWorkingHours:
         async def fake_sleep(secs):
             sleep_args.append(secs)
 
-        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS, working_hours={"start": "09:00", "end": "17:00"})
         # Force the poller into sleeping state by patching _is_in_working_hours
         with patch("poller._is_in_working_hours", return_value=False), \
              patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
@@ -643,7 +635,7 @@ class TestUsagePollerWorkingHours:
         async def fake_sleep(secs):
             sleep_args.append(secs)
 
-        p = poller.UsagePoller(working_hours={"start": "09:00", "end": "17:00"})
+        p = poller.UsagePoller(thresholds=TEST_THRESHOLDS, working_hours={"start": "09:00", "end": "17:00"})
         # Force awake state
         with patch("poller._is_in_working_hours", return_value=True), \
              patch("poller.get_oauth_token", return_value="sk-ant-oat01-fake"), \
@@ -653,4 +645,4 @@ class TestUsagePollerWorkingHours:
              patch("asyncio.sleep", side_effect=fake_sleep):
             await p.run()
 
-        assert sleep_args == [300]   # 50% session → normal tier (300s)
+        assert sleep_args == [600]   # 50% session → normal tier (600s)

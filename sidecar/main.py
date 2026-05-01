@@ -29,7 +29,7 @@ from pydantic import BaseModel
 import db
 import pricing
 from keychain import is_authenticated, get_oauth_token
-from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS, RateLimitedError
+from poller import UsagePoller, load_state, RateLimitedError
 from parser import scan_all_sessions, start_watchers, CLAUDE_CODE_DIR, COWORK_DIR
 from activity_monitor import ActivityMonitor
 from suggestions_loader import load_suggestions
@@ -62,27 +62,21 @@ DEFAULT_CONFIG = {
             "minimal":  {"above": 0.00, "intervalSec": 3600},
         }
     },
-    "warnings": {"amberPct": 80, "redPct": 90},
+    "warnings": {"warningPercentage": 80, "criticalPercentage": 90},
     "suggestions": {
         "enabled": True,
         "maxVisible": 5,
         "triggers": {
             "low_utilization_eow": {
                 "tiers": [
-                    {"hoursUntilResetBelow": 72, "weeklyPctBelow": 0.70},
-                    {"hoursUntilResetBelow": 48, "weeklyPctBelow": 0.50},
+                    {"hoursUntilResetBelow": 72, "weeklyPercentageBelow": 0.70},
+                    {"hoursUntilResetBelow": 48, "weeklyPercentageBelow": 0.50},
                 ],
             },
             "post_reset": {
-                "windowHours": 4,
-                "dropThreshold": 0.30,
+                "weeklyPercentageBelow": 0.30,
             },
         },
-    },
-    "notifications": {
-        "limitWarnings": True,
-        "dailySummary": True,
-        "dailySummaryTime": "17:00",
     },
 }
 
@@ -115,9 +109,12 @@ def _build_poll_thresholds(config: dict) -> list[tuple[float, int]]:
     try:
         pairs = [(v["above"], v["intervalSec"]) for v in raw.values()]
     except (KeyError, TypeError):
-        log.warning("Invalid poll thresholds in config.json; using defaults")
-        return list(DEFAULT_THRESHOLDS)
-    return sorted(pairs, reverse=True) if pairs else list(DEFAULT_THRESHOLDS)
+        pairs = []
+    if not pairs:
+        log.warning("Invalid or empty poll thresholds in config.json; using defaults")
+        raw = DEFAULT_CONFIG["poll"]["thresholds"]
+        pairs = [(v["above"], v["intervalSec"]) for v in raw.values()]
+    return sorted(pairs, reverse=True)
 
 
 # ── App state ─────────────────────────────────────────────────────────────────
@@ -127,34 +124,9 @@ _poller: Optional[UsagePoller] = None
 _poller_task: Optional[asyncio.Task] = None
 _watcher = None
 
-# Prior-snapshot tracking for post_reset trigger detection.
-# _prev_latest holds (weekly_pct, recorded_at) from the most recent poll so
-# that the NEXT poll can detect a significant drop.
-_prior_weekly_pct: Optional[float] = None
-_prior_recorded_at: Optional[str] = None
-_prev_latest: Optional[tuple[float, str]] = None  # staging buffer
-
 # Suggestions — loaded once at startup, available for all /suggestions requests.
 _all_suggestions: list[dict] = []
 _suggestions_yaml_error: Optional[str] = None  # surfaced in GET /suggestions
-
-
-def _on_poller_update(snapshot) -> None:
-    """Callback fired by UsagePoller after each successful poll.
-
-    Advances the staging buffer so /suggestions can compare the current reading
-    against the previous one for post_reset detection.
-    """
-    global _prior_weekly_pct, _prior_recorded_at, _prev_latest
-    # Both reads (_prior_*) and writes (_prev_latest) happen on the asyncio event
-    # loop — the poller's callback runs inside its async task, and get_suggestions()
-    # runs on the same loop — so no lock is needed. If the poller moves to a thread,
-    # protect these globals with asyncio.Lock.
-    # Move the previously staged reading into "prior" (visible to trigger eval).
-    if _prev_latest is not None:
-        _prior_weekly_pct, _prior_recorded_at = _prev_latest
-    # Stage the just-received reading for the next iteration.
-    _prev_latest = (snapshot.weekly_pct, snapshot.recorded_at)
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -219,7 +191,6 @@ async def lifespan(app: FastAPI):
     _poller = UsagePoller(
         thresholds=thresholds,
         working_hours=_config.get("workingHours"),
-        on_update=_on_poller_update,
     )
     _poller_task = asyncio.create_task(_poller.run())
 
@@ -530,8 +501,6 @@ def get_suggestions():
     active_triggers = evaluate_triggers(
         weekly_pct=weekly_pct,
         weekly_resets=weekly_resets,
-        prior_weekly_pct=_prior_weekly_pct,
-        prior_recorded_at=_prior_recorded_at,
         config=_config,
     )
     trigger_context = build_trigger_context(weekly_pct, weekly_resets, active_triggers)

@@ -26,7 +26,7 @@ import threading
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta, time as dtime
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional
 
 import httpx
 
@@ -40,17 +40,6 @@ log = logging.getLogger(__name__)
 USAGE_API_URL = "https://api.anthropic.com/api/oauth/usage"
 API_BETA_HEADER = "oauth-2025-04-20"
 STATE_PATH = Path.home() / ".claude-lens" / "state.json"
-
-# Default poll thresholds (utilisation → interval seconds).
-# Overridable via config.json "poll.thresholds".
-DEFAULT_THRESHOLDS: list[tuple[float, int]] = [
-    (0.90, 30),
-    (0.80, 60),
-    (0.60, 120),
-    (0.20, 300),
-    (0.05, 1800),
-    (0.00, 3600),
-]
 
 BACKOFF_MAX_SEC = 600              # 10 minutes — for transient errors
 RATE_LIMIT_BACKOFF_MIN_SEC = 60    # never back off less than 1 minute on 429
@@ -131,19 +120,19 @@ def save_state(snapshot: UsageSnapshot, interval_sec: int) -> None:
 def compute_interval(
     session_pct: float,
     weekly_pct: float,
-    thresholds: list[tuple[float, int]] = DEFAULT_THRESHOLDS,
+    thresholds: list[tuple[float, int]],
 ) -> int:
     """Return the appropriate poll interval in seconds given current utilisation."""
     utilisation = session_pct
     for threshold, interval in thresholds:
         if utilisation >= threshold:
             return interval
-    return DEFAULT_THRESHOLDS[-1][1]
+    return thresholds[-1][1]
 
 
 def _effective_interval(
     snapshot: "UsageSnapshot",
-    thresholds: list[tuple[float, int]] = DEFAULT_THRESHOLDS,
+    thresholds: list[tuple[float, int]],
 ) -> int:
     """
     Return the poll interval for the given snapshot.
@@ -268,21 +257,13 @@ async def fetch_usage(token: str) -> Optional[UsageSnapshot]:
 # ── Poller ────────────────────────────────────────────────────────────────────
 
 class UsagePoller:
-    """
-    Background async task that polls the usage API on a dynamic interval.
-
-    Usage:
-        poller = UsagePoller(on_update=my_callback)
-        asyncio.create_task(poller.run())
-    """
+    """Background async task that polls the usage API on a dynamic interval."""
 
     def __init__(
         self,
-        on_update: Optional[Callable[[UsageSnapshot], None]] = None,
-        thresholds: list[tuple[float, int]] = DEFAULT_THRESHOLDS,
+        thresholds: list[tuple[float, int]],
         working_hours: Optional[dict] = None,
     ):
-        self._on_update = on_update
         self._thresholds = thresholds
         self._current, saved_interval = load_state()
         self._backoff_sec: int = 0
@@ -321,7 +302,7 @@ class UsagePoller:
             except Exception:
                 pass
 
-        self._interval_sec: int = saved_interval or DEFAULT_THRESHOLDS[3][1]
+        self._interval_sec: int = saved_interval or compute_interval(0.20, 0.0, thresholds)
         if self._initial_sleep_sec > 0:
             log.info("Resuming poll schedule — first poll in %ds", self._initial_sleep_sec)
 
@@ -426,11 +407,6 @@ class UsagePoller:
                     self._interval_sec = SLEEP_INTERVAL_SEC
                 save_state(snapshot, self._interval_sec)
 
-                if self._on_update:
-                    result = self._on_update(snapshot)
-                    if asyncio.iscoroutine(result):
-                        await result
-
                 log.info(
                     "Usage: session=%.0f%% weekly=%.0f%% → next poll in %ds%s",
                     snapshot.session_pct * 100,
@@ -490,8 +466,4 @@ class UsagePoller:
             if self.is_sleeping:
                 self._interval_sec = SLEEP_INTERVAL_SEC
             save_state(snapshot, self._interval_sec)
-            if self._on_update:
-                result = self._on_update(snapshot)
-                if asyncio.iscoroutine(result):
-                    await result
         return snapshot

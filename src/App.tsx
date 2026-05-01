@@ -170,6 +170,19 @@ export default function App() {
       .catch(() => setOnboardingComplete(true)); // if invoke fails, skip onboarding
   }, []);
 
+  // Seeds match DEFAULT_CONFIG; overwritten when config fetch resolves.
+  const [warnAt, setWarnAt] = useState(0.80);
+  const [critAt, setCritAt] = useState(0.90);
+
+  useEffect(() => {
+    api.getConfig()
+      .then((cfg) => {
+        setWarnAt(cfg.warnings.warningPercentage / 100);
+        setCritAt(cfg.warnings.criticalPercentage / 100);
+      })
+      .catch(() => { /* keep seed defaults */ });
+  }, []);
+
   const [expanded, setExpanded] = useState(false);
   const [showTray, setShowTray] = useState(false);
 
@@ -335,8 +348,8 @@ export default function App() {
                 </>
               ) : usage ? (
                 <>
-                  <UsageTile type="session" pct={usage.sessionPct} resetsAt={usage.sessionResetsAt} />
-                  <UsageTile type="weekly"  pct={usage.weeklyPct}  resetsAt={usage.weeklyResetsAt} style={{ animationDelay: "0.3s" }} />
+                  <UsageTile type="session" pct={usage.sessionPct} resetsAt={usage.sessionResetsAt} warnAt={warnAt} critAt={critAt} />
+                  <UsageTile type="weekly"  pct={usage.weeklyPct}  resetsAt={usage.weeklyResetsAt}  warnAt={warnAt} critAt={critAt} style={{ animationDelay: "0.3s" }} />
                 </>
               ) : null}
             </div>
@@ -433,8 +446,8 @@ export default function App() {
                 </>
               ) : usage ? (
                 <>
-                  <UsageTile type="session" pct={usage.sessionPct} resetsAt={usage.sessionResetsAt} />
-                  <UsageTile type="weekly"  pct={usage.weeklyPct}  resetsAt={usage.weeklyResetsAt} style={{ animationDelay: "0.3s" }} />
+                  <UsageTile type="session" pct={usage.sessionPct} resetsAt={usage.sessionResetsAt} warnAt={warnAt} critAt={critAt} />
+                  <UsageTile type="weekly"  pct={usage.weeklyPct}  resetsAt={usage.weeklyResetsAt}  warnAt={warnAt} critAt={critAt} style={{ animationDelay: "0.3s" }} />
                 </>
               ) : null}
             </div>

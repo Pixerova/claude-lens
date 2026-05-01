@@ -107,6 +107,13 @@ export interface OnboardingStatus {
   complete: boolean;
 }
 
+export interface AppConfig {
+  warnings: {
+    warningPercentage: number;   // integer, e.g. 80
+    criticalPercentage: number;  // integer, e.g. 90
+  };
+}
+
 export interface SuggestionsResponse {
   suggestions: Suggestion[];
   trigger_context: {
@@ -226,5 +233,10 @@ export const api = {
     return invoke<void>("set_onboarding_complete").then(() => {
       _onboardingComplete = true;
     });
+  },
+
+  /** App configuration (warnings thresholds, etc.) from the sidecar's merged config. */
+  getConfig(): Promise<AppConfig> {
+    return sidecarFetch<AppConfig>("/config");
   },
 };

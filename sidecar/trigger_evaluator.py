@@ -44,13 +44,12 @@ def _low_util_tiers(config: dict) -> list[dict]:
         return []
 
 
-def _post_reset_config(config: dict) -> tuple[float, float]:
-    """Return (dropThreshold, windowHours) from config."""
+def _post_reset_threshold(config: dict) -> float:
+    """Return weeklyPercentageBelow threshold for the post_reset trigger."""
     try:
-        t = config["suggestions"]["triggers"]["post_reset"]
-        return float(t["dropThreshold"]), float(t["windowHours"])
+        return float(config["suggestions"]["triggers"]["post_reset"]["weeklyPercentageBelow"])
     except (KeyError, TypeError):
-        return 0.30, 4.0
+        return 0.30
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -58,18 +57,14 @@ def _post_reset_config(config: dict) -> tuple[float, float]:
 def evaluate_triggers(
     weekly_pct: float,
     weekly_resets: Optional[str],
-    prior_weekly_pct: Optional[float],
-    prior_recorded_at: Optional[str],
     config: dict,
 ) -> set[str]:
     """Evaluate which trigger types are currently active.
 
     Args:
-        weekly_pct:         Current weekly utilisation (0.0–1.0).
-        weekly_resets:      ISO 8601 UTC string of the next weekly reset.
-        prior_weekly_pct:   Weekly utilisation from the previous poll reading.
-        prior_recorded_at:  ISO 8601 UTC timestamp of the previous reading.
-        config:             Loaded config dict (from ~/.claude-lens/config.json).
+        weekly_pct:    Current weekly utilisation (0.0–1.0).
+        weekly_resets: ISO 8601 UTC string of the next weekly reset.
+        config:        Loaded config dict (from ~/.claude-lens/config.json).
 
     Returns:
         Set of active trigger type strings, e.g. {"always", "low_utilization_eow"}.
@@ -82,7 +77,7 @@ def evaluate_triggers(
 
     for tier in tiers:
         try:
-            pct_threshold = float(tier["weeklyPctBelow"])
+            pct_threshold = float(tier["weeklyPercentageBelow"])
             hours_threshold = float(tier["hoursUntilResetBelow"])
         except (KeyError, TypeError, ValueError):
             log.warning("Skipping malformed low_utilization_eow tier: %r", tier)
@@ -98,22 +93,10 @@ def evaluate_triggers(
             break  # one matching tier is sufficient
 
     # ── post_reset ────────────────────────────────────────────────────────────
-    drop_threshold, window_hours = _post_reset_config(config)
-
-    if prior_weekly_pct is not None and prior_recorded_at is not None:
-        drop = prior_weekly_pct - weekly_pct
-        if drop >= drop_threshold:
-            try:
-                prior_dt = datetime.fromisoformat(prior_recorded_at.replace("Z", "+00:00"))
-                hours_since = (datetime.now(tz=timezone.utc) - prior_dt).total_seconds() / 3600
-                if hours_since <= window_hours:
-                    active.add("post_reset")
-                    log.debug(
-                        "post_reset: drop=%.2f >= %.2f, hours_since=%.1f <= %.1f",
-                        drop, drop_threshold, hours_since, window_hours,
-                    )
-            except (ValueError, AttributeError):
-                log.warning("Could not parse prior_recorded_at: %r", prior_recorded_at)
+    threshold = _post_reset_threshold(config)
+    if weekly_pct < threshold:
+        active.add("post_reset")
+        log.debug("post_reset: weekly_pct=%.2f < %.2f", weekly_pct, threshold)
 
     return active
 
