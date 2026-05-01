@@ -3,8 +3,9 @@
 > macOS widget for Claude Pro — real-time usage gauges, session insights, and smart suggestions to stop leaving weekly capacity on the table.
 Built with Claude Pro!
 
-<!-- screenshot placeholder — replace with actual screenshot once available -->
-<!-- ![claude-lens widget screenshot](docs/screenshot.png) -->
+| Collapsed | Expanded | Suggestions |
+|:---------:|:--------:|:-----------:|
+| ![Collapsed view](docs/claude-lens_collapsed_view.png) | ![Expanded view](docs/claude-lens_expanded_view.png) | ![Suggestions](docs/claude-lens_suggestions.png) |
 
 ---
 
