@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +30,13 @@ from suggestions_schema import CUSTOM_PREFIX, VALID_TRIGGERS, REQUIRED_FIELDS
 
 log = logging.getLogger(__name__)
 
-_BUNDLED_YAML = Path(__file__).parent / "data" / "suggestions.yaml"
-_CUSTOM_TEMPLATE = Path(__file__).parent / "data" / "custom_suggestions_template.yaml"
+# In a PyInstaller --onefile binary, modules are stored in a compressed archive
+# and Path(__file__).parent is unreliable. Use sys._MEIPASS (the temp extraction
+# dir) when running as a bundle, fall back to the source file location otherwise.
+_DATA_DIR = Path(sys._MEIPASS) / "data" if hasattr(sys, "_MEIPASS") else Path(__file__).parent / "data"
+
+_BUNDLED_YAML = _DATA_DIR / "suggestions.yaml"
+_CUSTOM_TEMPLATE = _DATA_DIR / "custom_suggestions_template.yaml"
 _CUSTOM_YAML = Path.home() / ".claude-lens" / "custom_suggestions.yaml"
 
 VALID_CATEGORIES = {
