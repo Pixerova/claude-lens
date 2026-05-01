@@ -179,4 +179,21 @@ describe("useUsage polling chain", () => {
     expect(result.current.usage?.isStale).toBe(false);
     expect(result.current.authError).toBe(false);
   });
+
+  it("falls back to cached data silently when refresh returns 429", async () => {
+    vi.spyOn(apiModule.api, "getUsageCurrent").mockResolvedValue(freshSnapshot);
+    vi.spyOn(apiModule.api, "refreshUsage").mockRejectedValue(
+      new Error("Sidecar 429: Rate limited — retry after 60s")
+    );
+    vi.spyOn(apiModule.api, "getHealth").mockResolvedValue(healthOk);
+
+    const { result } = renderHook(() => useUsage());
+    await flush(); // initial fetch
+
+    await act(async () => { void result.current.refresh(); });
+    await flush(); // refresh settles
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.usage).not.toBeNull();
+  });
 });
