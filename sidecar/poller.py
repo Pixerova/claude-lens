@@ -457,7 +457,13 @@ class UsagePoller:
                 await asyncio.sleep(self._backoff_sec)
 
     async def force_refresh(self) -> Optional[UsageSnapshot]:
-        """Trigger an immediate poll outside the normal schedule. Returns new snapshot."""
+        """Trigger an immediate poll outside the normal schedule.
+
+        Returns the new UsageSnapshot on success, or None if the token is
+        missing or a transient network/API error occurred.
+        Raises AuthError if the token is rejected (401).
+        Raises RateLimitedError if the Anthropic API is rate-limiting (429).
+        """
         token = get_oauth_token()
         if not token:
             return None

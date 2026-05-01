@@ -249,6 +249,19 @@ async def test_usage_refresh_triggers_poll_and_returns_snapshot(isolated_db):
     assert isinstance(data["recordedAt"], str)
 
 
+async def test_usage_refresh_rate_limited_returns_429(isolated_db):
+    """When force_refresh raises RateLimitedError, endpoint returns 429 with Retry-After."""
+    from poller import RateLimitedError
+
+    mp = _make_mock_poller()
+    mp.force_refresh = AsyncMock(side_effect=RateLimitedError(60))
+    async with _api_client(mock_poller=mp) as (_, client, __):
+        resp = await client.post("/usage/refresh")
+    assert resp.status_code == 429
+    assert resp.headers.get("retry-after") == "60"
+    assert "retry" in resp.json().get("detail", "").lower()
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # GET /usage/history
 # ══════════════════════════════════════════════════════════════════════════════

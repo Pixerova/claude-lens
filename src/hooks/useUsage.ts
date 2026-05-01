@@ -49,9 +49,23 @@ export function useUsage(): UseUsageResult {
 
   const fetchUsage = useCallback(async (force = false) => {
     try {
-      const data = force
-        ? await api.refreshUsage()
-        : await api.getUsageCurrent();
+      let data: UsageCurrent;
+      if (force) {
+        try {
+          data = await api.refreshUsage();
+        } catch (err) {
+          // 429 means the Anthropic API is rate-limiting us. Fall back to the
+          // last cached snapshot so the widget stays populated; the sidecar
+          // poller will resume on its own Retry-After backoff.
+          if (err instanceof Error && err.message.includes("Sidecar 429")) {
+            data = await api.getUsageCurrent();
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        data = await api.getUsageCurrent();
+      }
       setUsage(data);
       setError(null);
       // Sync client poll cadence with the server's current interval so

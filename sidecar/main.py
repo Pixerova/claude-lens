@@ -29,7 +29,7 @@ from pydantic import BaseModel
 import db
 import pricing
 from keychain import is_authenticated, get_oauth_token
-from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS
+from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS, RateLimitedError
 from parser import scan_all_sessions, start_watchers, CLAUDE_CODE_DIR, COWORK_DIR
 from activity_monitor import ActivityMonitor
 from suggestions_loader import load_suggestions
@@ -350,7 +350,14 @@ async def usage_refresh():
     """Force an immediate poll outside the normal schedule."""
     if not _poller:
         raise HTTPException(status_code=503, detail="Poller not running")
-    snap = await _poller.force_refresh()
+    try:
+        snap = await _poller.force_refresh()
+    except RateLimitedError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limited — retry after {exc.retry_after}s",
+            headers={"Retry-After": str(exc.retry_after)},  # delay-seconds, per RFC 9110 §10.2.3
+        )
     if not snap:
         if _poller.auth_error:
             raise HTTPException(status_code=401, detail="OAuth token rejected — re-authenticate Claude Code")
