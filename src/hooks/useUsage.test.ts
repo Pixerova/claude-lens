@@ -197,6 +197,7 @@ describe("useUsage polling chain", () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.usage).not.toBeNull();
+    expect(result.current.isLoading).toBe(false);
     // 1 initial fetch + 1 fallback call from the 429 handler
     expect(getCurrent).toHaveBeenCalledTimes(2);
 

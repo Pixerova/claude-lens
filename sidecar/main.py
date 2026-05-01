@@ -356,7 +356,7 @@ async def usage_refresh():
         raise HTTPException(
             status_code=429,
             detail=f"Rate limited — retry after {exc.retry_after}s",
-            headers={"Retry-After": str(exc.retry_after)},
+            headers={"Retry-After": str(exc.retry_after)},  # delay-seconds, per RFC 9110 §10.2.3
         )
     if not snap:
         if _poller.auth_error:
