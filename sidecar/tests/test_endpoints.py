@@ -187,6 +187,17 @@ async def test_config_excludes_pricing(isolated_db):
     assert "pricing" not in resp.json()
 
 
+async def test_config_returns_merged_non_default_warnings(isolated_db):
+    async with _api_client() as (m, client, __):
+        import main
+        custom = main._deep_merge(main.DEFAULT_CONFIG, {"warnings": {"warningPercentage": 0.70, "criticalPercentage": 0.85}})
+        m._config = custom
+        resp = await client.get("/config")
+    data = resp.json()
+    assert data["warnings"]["warningPercentage"] == pytest.approx(0.70)
+    assert data["warnings"]["criticalPercentage"] == pytest.approx(0.85)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # GET /usage/current
 # ══════════════════════════════════════════════════════════════════════════════

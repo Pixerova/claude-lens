@@ -14,6 +14,7 @@ Startup sequence:
 """
 
 import asyncio
+import copy
 import json
 import logging
 import threading
@@ -94,7 +95,6 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 def _validate_config(config: dict) -> dict:
     """Check all fraction fields are in [0, 1]; log error and substitute default for any that aren't."""
-    import copy
     result = copy.deepcopy(config)
 
     def _check(path: str, value, default: float) -> float:
@@ -118,6 +118,14 @@ def _validate_config(config: dict) -> dict:
             "warnings.criticalPercentage", w["criticalPercentage"],
             DEFAULT_CONFIG["warnings"]["criticalPercentage"],
         )
+        if w["warningPercentage"] >= w["criticalPercentage"]:
+            log.error(
+                "config: warnings.warningPercentage (%.2f) must be less than criticalPercentage (%.2f) "
+                "— using defaults",
+                w["warningPercentage"], w["criticalPercentage"],
+            )
+            w["warningPercentage"] = DEFAULT_CONFIG["warnings"]["warningPercentage"]
+            w["criticalPercentage"] = DEFAULT_CONFIG["warnings"]["criticalPercentage"]
     except (KeyError, TypeError):
         pass
 
@@ -128,6 +136,19 @@ def _validate_config(config: dict) -> dict:
             tier["above"] = _check(f"poll.thresholds.{name}.above", tier["above"], default_above)
         except (KeyError, TypeError):
             pass
+        try:
+            v = int(tier["intervalSec"])
+            if v <= 0:
+                raise ValueError(v)
+            tier["intervalSec"] = v
+        except (KeyError, TypeError, ValueError):
+            default_tier = DEFAULT_CONFIG["poll"]["thresholds"].get(name)
+            default_interval = default_tier["intervalSec"] if default_tier else 300
+            log.error(
+                "config: poll.thresholds.%s.intervalSec must be a positive integer; got %r — using default %d",
+                name, tier.get("intervalSec"), default_interval,
+            )
+            tier["intervalSec"] = default_interval
 
     try:
         pr = result["suggestions"]["triggers"]["post_reset"]
@@ -163,7 +184,7 @@ def load_config() -> dict:
             return _validate_config(merged)
         except Exception as exc:
             log.warning("Could not load config.json (%s), using defaults", exc)
-    return DEFAULT_CONFIG
+    return copy.deepcopy(DEFAULT_CONFIG)
 
 
 def _build_poll_thresholds(config: dict) -> list[tuple[float, int]]:

@@ -16,8 +16,6 @@ import main as m
 
 def _merged(**overrides) -> dict:
     """Return a deep-merged config with the given leaf overrides applied."""
-    import json
-
     def _set(d, path, value):
         keys = path.split(".")
         for k in keys[:-1]:
@@ -63,6 +61,17 @@ def test_warning_percentage_string_is_replaced(caplog):
     assert "warnings.warningPercentage" in caplog.text
 
 
+# ── warnings ordering ────────────────────────────────────────────────────────
+
+def test_inverted_warning_thresholds_resets_both_to_defaults(caplog):
+    cfg = _merged(**{"warnings.warningPercentage": 0.95, "warnings.criticalPercentage": 0.80})
+    with caplog.at_level(logging.ERROR, logger="main"):
+        result = m._validate_config(cfg)
+    assert result["warnings"]["warningPercentage"] == m.DEFAULT_CONFIG["warnings"]["warningPercentage"]
+    assert result["warnings"]["criticalPercentage"] == m.DEFAULT_CONFIG["warnings"]["criticalPercentage"]
+    assert "warningPercentage" in caplog.text
+
+
 # ── poll thresholds ───────────────────────────────────────────────────────────
 
 def test_poll_threshold_above_out_of_range_is_replaced(caplog):
@@ -73,6 +82,26 @@ def test_poll_threshold_above_out_of_range_is_replaced(caplog):
     assert result["poll"]["thresholds"]["critical"]["above"] == \
         m.DEFAULT_CONFIG["poll"]["thresholds"]["critical"]["above"]
     assert "poll.thresholds.critical.above" in caplog.text
+
+
+def test_poll_threshold_interval_sec_string_is_replaced(caplog):
+    cfg = copy.deepcopy(m.DEFAULT_CONFIG)
+    cfg["poll"]["thresholds"]["critical"]["intervalSec"] = "fast"
+    with caplog.at_level(logging.ERROR, logger="main"):
+        result = m._validate_config(cfg)
+    assert result["poll"]["thresholds"]["critical"]["intervalSec"] == \
+        m.DEFAULT_CONFIG["poll"]["thresholds"]["critical"]["intervalSec"]
+    assert "intervalSec" in caplog.text
+
+
+def test_poll_threshold_interval_sec_negative_is_replaced(caplog):
+    cfg = copy.deepcopy(m.DEFAULT_CONFIG)
+    cfg["poll"]["thresholds"]["critical"]["intervalSec"] = -10
+    with caplog.at_level(logging.ERROR, logger="main"):
+        result = m._validate_config(cfg)
+    assert result["poll"]["thresholds"]["critical"]["intervalSec"] == \
+        m.DEFAULT_CONFIG["poll"]["thresholds"]["critical"]["intervalSec"]
+    assert "intervalSec" in caplog.text
 
 
 # ── post_reset ────────────────────────────────────────────────────────────────
