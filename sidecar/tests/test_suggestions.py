@@ -170,7 +170,7 @@ class TestLowUtilizationEOW:
             {"hoursUntilResetBelow": 48, "weeklyPercentageBelow": 0.50},
         ])
         resets = (FAKE_UTC + timedelta(hours=24)).isoformat()
-        # pct=0.80 exceeds both weeklyPctBelow values
+        # pct=0.80 exceeds both weeklyPercentageBelow values
         assert "low_utilization_eow" not in self._eval(0.80, resets, config)
 
     def test_empty_tiers_does_not_fire(self):

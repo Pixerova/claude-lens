@@ -127,7 +127,7 @@ def compute_interval(
     for threshold, interval in thresholds:
         if utilisation >= threshold:
             return interval
-    return thresholds[-1][1]
+    return thresholds[-1][1] if thresholds else 300
 
 
 def _effective_interval(

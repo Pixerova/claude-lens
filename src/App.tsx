@@ -177,8 +177,8 @@ export default function App() {
   useEffect(() => {
     api.getConfig()
       .then((cfg) => {
-        setWarnAt(cfg.warnings.warningPercentage / 100);
-        setCritAt(cfg.warnings.criticalPercentage / 100);
+        if (cfg.warnings?.warningPercentage != null) setWarnAt(cfg.warnings.warningPercentage / 100);
+        if (cfg.warnings?.criticalPercentage != null) setCritAt(cfg.warnings.criticalPercentage / 100);
       })
       .catch(() => { /* keep seed defaults */ });
   }, []);

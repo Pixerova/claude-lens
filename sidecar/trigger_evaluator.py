@@ -6,10 +6,9 @@ Evaluates which suggestion trigger types are currently active.
 Trigger types
 ─────────────
 always             Always active.
-low_utilization_eow  Any configured tier matches: weekly_pct < tier.weeklyPctBelow
+low_utilization_eow  Any configured tier matches: weekly_pct < tier.weeklyPercentageBelow
                      AND hours_until_reset < tier.hoursUntilResetBelow.
-post_reset         weekly_pct dropped ≥ dropThreshold vs prior reading AND
-                   that drop was detected within windowHours.
+post_reset         weekly_pct < post_reset.weeklyPercentageBelow.
 """
 
 from __future__ import annotations
@@ -93,6 +92,8 @@ def evaluate_triggers(
             break  # one matching tier is sufficient
 
     # ── post_reset ────────────────────────────────────────────────────────────
+    # post_reset fires whenever capacity is high enough — this can overlap with
+    # low_utilization_eow near end-of-week, which is intentional.
     threshold = _post_reset_threshold(config)
     if weekly_pct < threshold:
         active.add("post_reset")
