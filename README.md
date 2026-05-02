@@ -100,8 +100,8 @@ claude-lens reads `~/.claude-lens/config.json` on startup. The file is optional 
     }
   },
   "warnings": {
-    "warningPercentage": 80,
-    "criticalPercentage": 90
+    "warningPercentage": 0.80,
+    "criticalPercentage": 0.90
   }
 }
 ```
@@ -112,7 +112,7 @@ claude-lens reads `~/.claude-lens/config.json` on startup. The file is optional 
 | `retentionDays` | Days of session history to keep |
 | `workingHours.start` / `workingHours.end` | Local 24-hour times defining your working day (e.g. `"09:00"` / `"17:00"`). Outside this window the poller drops to once every 30 minutes. If session file activity is detected after end-of-day, the window is automatically extended by one hour from the last event. Sleep mode is always active; change the times to adjust your window. |
 | `poll.thresholds` | Adaptive API poll intervals — each tier fires when utilization is above the given fraction; the highest matching tier wins |
-| `warnings.warningPercentage` / `warnings.criticalPercentage` | Utilization % at which the widget transitions to amber / red |
+| `warnings.warningPercentage` / `warnings.criticalPercentage` | Utilization fraction (0–1) at which the widget transitions to amber / red |
 
 
 ### Add your own suggestions
