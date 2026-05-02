@@ -45,8 +45,7 @@ FAKE_LOCAL = datetime(2026, 4, 20, 10, 0, 0)
 def make_config(
     weekly_pct_below=0.50,
     hours_until_below=48,
-    drop_threshold=0.30,
-    window_hours=4,
+    post_reset_pct_below=0.30,
     max_visible=5,
     enabled=True,
     tiers=None,
@@ -58,7 +57,7 @@ def make_config(
     test multi-tier behaviour.
     """
     resolved_tiers = tiers if tiers is not None else [
-        {"hoursUntilResetBelow": hours_until_below, "weeklyPctBelow": weekly_pct_below},
+        {"hoursUntilResetBelow": hours_until_below, "weeklyPercentageBelow": weekly_pct_below},
     ]
     return {
         "suggestions": {
@@ -69,8 +68,7 @@ def make_config(
                     "tiers": resolved_tiers,
                 },
                 "post_reset": {
-                    "dropThreshold": drop_threshold,
-                    "windowHours": window_hours,
+                    "weeklyPercentageBelow": post_reset_pct_below,
                 },
             },
         }
@@ -121,8 +119,6 @@ class TestLowUtilizationEOW:
             return trigger_evaluator.evaluate_triggers(
                 weekly_pct=weekly_pct,
                 weekly_resets=weekly_resets,
-                prior_weekly_pct=None,
-                prior_recorded_at=None,
                 config=config,
             )
 
@@ -151,8 +147,8 @@ class TestLowUtilizationEOW:
         """Two tiers: first requires 72 h / 70 %, second requires 48 h / 50 %.
         Usage is 60 % with 60 h to reset — first tier matches (pct < 70%, hours < 72)."""
         config = make_config(tiers=[
-            {"hoursUntilResetBelow": 72, "weeklyPctBelow": 0.70},
-            {"hoursUntilResetBelow": 48, "weeklyPctBelow": 0.50},
+            {"hoursUntilResetBelow": 72, "weeklyPercentageBelow": 0.70},
+            {"hoursUntilResetBelow": 48, "weeklyPercentageBelow": 0.50},
         ])
         resets = (FAKE_UTC + timedelta(hours=60)).isoformat()
         assert "low_utilization_eow" in self._eval(0.60, resets, config)
@@ -161,8 +157,8 @@ class TestLowUtilizationEOW:
         """Two tiers: 72 h / 70 % and 48 h / 50 %.
         Usage is 40 % with 24 h to reset — only second tier matches."""
         config = make_config(tiers=[
-            {"hoursUntilResetBelow": 72, "weeklyPctBelow": 0.70},
-            {"hoursUntilResetBelow": 48, "weeklyPctBelow": 0.50},
+            {"hoursUntilResetBelow": 72, "weeklyPercentageBelow": 0.70},
+            {"hoursUntilResetBelow": 48, "weeklyPercentageBelow": 0.50},
         ])
         resets = (FAKE_UTC + timedelta(hours=24)).isoformat()
         assert "low_utilization_eow" in self._eval(0.40, resets, config)
@@ -170,11 +166,11 @@ class TestLowUtilizationEOW:
     def test_no_tier_matches_does_not_fire(self):
         """Two tiers; usage is too high for both — should not fire."""
         config = make_config(tiers=[
-            {"hoursUntilResetBelow": 72, "weeklyPctBelow": 0.70},
-            {"hoursUntilResetBelow": 48, "weeklyPctBelow": 0.50},
+            {"hoursUntilResetBelow": 72, "weeklyPercentageBelow": 0.70},
+            {"hoursUntilResetBelow": 48, "weeklyPercentageBelow": 0.50},
         ])
         resets = (FAKE_UTC + timedelta(hours=24)).isoformat()
-        # pct=0.80 exceeds both weeklyPctBelow values
+        # pct=0.80 exceeds both weeklyPercentageBelow values
         assert "low_utilization_eow" not in self._eval(0.80, resets, config)
 
     def test_empty_tiers_does_not_fire(self):
@@ -184,37 +180,33 @@ class TestLowUtilizationEOW:
 
 
 class TestPostReset:
-    def _eval(self, weekly_pct, weekly_resets, prior_pct, prior_at, config):
+    def _eval(self, weekly_pct, config):
         with patch.object(trigger_evaluator, "datetime", MockDatetime):
             return trigger_evaluator.evaluate_triggers(
                 weekly_pct=weekly_pct,
-                weekly_resets=weekly_resets,
-                prior_weekly_pct=prior_pct,
-                prior_recorded_at=prior_at,
+                weekly_resets=None,
                 config=config,
             )
 
-    def test_fires_on_large_drop_within_window(self):
-        config = make_config(drop_threshold=0.30, window_hours=4)
-        prior_at = (FAKE_UTC - timedelta(hours=2)).isoformat()
-        result = self._eval(0.05, None, prior_pct=0.75, prior_at=prior_at, config=config)
+    def test_fires_when_below_threshold(self):
+        config = make_config(post_reset_pct_below=0.30)
+        result = self._eval(0.05, config)
         assert "post_reset" in result
 
-    def test_does_not_fire_when_drop_small(self):
-        config = make_config(drop_threshold=0.30, window_hours=4)
-        prior_at = (FAKE_UTC - timedelta(hours=2)).isoformat()
-        result = self._eval(0.60, None, prior_pct=0.70, prior_at=prior_at, config=config)
+    def test_fires_at_just_below_threshold(self):
+        config = make_config(post_reset_pct_below=0.30)
+        result = self._eval(0.299, config)
+        assert "post_reset" in result
+
+    def test_does_not_fire_at_exact_threshold(self):
+        """Condition is strictly <, so equality should not fire."""
+        config = make_config(post_reset_pct_below=0.30)
+        result = self._eval(0.30, config)
         assert "post_reset" not in result
 
-    def test_does_not_fire_when_outside_window(self):
-        config = make_config(drop_threshold=0.30, window_hours=4)
-        prior_at = (FAKE_UTC - timedelta(hours=6)).isoformat()  # 6 h > 4 h window
-        result = self._eval(0.05, None, prior_pct=0.80, prior_at=prior_at, config=config)
-        assert "post_reset" not in result
-
-    def test_does_not_fire_without_prior(self):
-        config = make_config()
-        result = self._eval(0.05, None, prior_pct=None, prior_at=None, config=config)
+    def test_does_not_fire_above_threshold(self):
+        config = make_config(post_reset_pct_below=0.30)
+        result = self._eval(0.60, config)
         assert "post_reset" not in result
 
 

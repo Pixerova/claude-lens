@@ -100,16 +100,12 @@ async def _api_client(
         "_config":           m._config,
         "_all_suggestions":  m._all_suggestions,
         "_suggestions_yaml_error": m._suggestions_yaml_error,
-        "_prior_weekly_pct": m._prior_weekly_pct,
-        "_prior_recorded_at": m._prior_recorded_at,
     }
 
     m._poller = mp
     m._config = m.DEFAULT_CONFIG.copy()
     m._all_suggestions = suggestions if suggestions is not None else []
     m._suggestions_yaml_error = None
-    m._prior_weekly_pct = None
-    m._prior_recorded_at = None
 
     transport = httpx.ASGITransport(app=m.app)
     try:
@@ -164,6 +160,42 @@ async def test_auth_status_false_when_no_token(isolated_db):
         resp = await client.get("/auth/status")
     assert resp.status_code == 200
     assert resp.json()["authenticated"] is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GET /config
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def test_config_returns_200(isolated_db):
+    async with _api_client() as (_, client, __):
+        resp = await client.get("/config")
+    assert resp.status_code == 200
+
+
+async def test_config_warnings_block_present(isolated_db):
+    async with _api_client() as (_, client, __):
+        resp = await client.get("/config")
+    data = resp.json()
+    assert "warnings" in data
+    assert data["warnings"]["warningPercentage"] == pytest.approx(0.80)
+    assert data["warnings"]["criticalPercentage"] == pytest.approx(0.90)
+
+
+async def test_config_excludes_pricing(isolated_db):
+    async with _api_client() as (_, client, __):
+        resp = await client.get("/config")
+    assert "pricing" not in resp.json()
+
+
+async def test_config_returns_merged_non_default_warnings(isolated_db):
+    async with _api_client() as (m, client, __):
+        import main
+        custom = main._deep_merge(main.DEFAULT_CONFIG, {"warnings": {"warningPercentage": 0.70, "criticalPercentage": 0.85}})
+        m._config = custom
+        resp = await client.get("/config")
+    data = resp.json()
+    assert data["warnings"]["warningPercentage"] == pytest.approx(0.70)
+    assert data["warnings"]["criticalPercentage"] == pytest.approx(0.85)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

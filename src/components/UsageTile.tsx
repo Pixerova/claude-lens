@@ -16,12 +16,14 @@ interface UsageTileProps {
   type: MeterType;
   pct: number;        // 0–1
   resetsAt: string;   // ISO 8601
+  warnAt: number;     // 0–1 fraction, e.g. 0.80
+  critAt: number;     // 0–1 fraction, e.g. 0.90
   style?: React.CSSProperties;
 }
 
-function alertLevel(pct: number): AlertLevel {
-  if (pct >= 0.90) return "danger";
-  if (pct >= 0.80) return "amber";
+function alertLevel(pct: number, warnAt: number, critAt: number): AlertLevel {
+  if (pct >= critAt) return "danger";
+  if (pct >= warnAt) return "amber";
   return "normal";
 }
 
@@ -43,9 +45,11 @@ export const UsageTile: React.FC<UsageTileProps> = ({
   type,
   pct,
   resetsAt,
+  warnAt,
+  critAt,
   style,
 }) => {
-  const level  = alertLevel(pct);
+  const level  = alertLevel(pct, warnAt, critAt);
   const isCrit = level === "danger";
   const bg     = BG[type][level];
   const label  = type === "session" ? "Session" : "Weekly";

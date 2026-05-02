@@ -14,6 +14,7 @@ Startup sequence:
 """
 
 import asyncio
+import copy
 import json
 import logging
 import threading
@@ -29,7 +30,7 @@ from pydantic import BaseModel
 import db
 import pricing
 from keychain import is_authenticated, get_oauth_token
-from poller import UsagePoller, load_state, DEFAULT_THRESHOLDS, RateLimitedError
+from poller import UsagePoller, load_state, RateLimitedError
 from parser import scan_all_sessions, start_watchers, CLAUDE_CODE_DIR, COWORK_DIR
 from activity_monitor import ActivityMonitor
 from suggestions_loader import load_suggestions
@@ -62,27 +63,21 @@ DEFAULT_CONFIG = {
             "minimal":  {"above": 0.00, "intervalSec": 3600},
         }
     },
-    "warnings": {"amberPct": 80, "redPct": 90},
+    "warnings": {"warningPercentage": 0.80, "criticalPercentage": 0.90},
     "suggestions": {
         "enabled": True,
         "maxVisible": 5,
         "triggers": {
             "low_utilization_eow": {
                 "tiers": [
-                    {"hoursUntilResetBelow": 72, "weeklyPctBelow": 0.70},
-                    {"hoursUntilResetBelow": 48, "weeklyPctBelow": 0.50},
+                    {"hoursUntilResetBelow": 72, "weeklyPercentageBelow": 0.70},
+                    {"hoursUntilResetBelow": 48, "weeklyPercentageBelow": 0.50},
                 ],
             },
             "post_reset": {
-                "windowHours": 4,
-                "dropThreshold": 0.30,
+                "weeklyPercentageBelow": 0.30,
             },
         },
-    },
-    "notifications": {
-        "limitWarnings": True,
-        "dailySummary": True,
-        "dailySummaryTime": "17:00",
     },
 }
 
@@ -98,15 +93,98 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def _validate_config(config: dict) -> dict:
+    """Check all fraction fields are in [0, 1]; log error and substitute default for any that aren't."""
+    result = copy.deepcopy(config)
+
+    def _check(path: str, value, default: float) -> float:
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            log.error("config: %s must be a number in [0, 1]; got %r — using default %.2f", path, value, default)
+            return default
+        if not (0.0 <= v <= 1.0):
+            log.error("config: %s out of range [0, 1]; got %r — using default %.2f", path, v, default)
+            return default
+        return v
+
+    try:
+        w = result["warnings"]
+        w["warningPercentage"] = _check(
+            "warnings.warningPercentage", w["warningPercentage"],
+            DEFAULT_CONFIG["warnings"]["warningPercentage"],
+        )
+        w["criticalPercentage"] = _check(
+            "warnings.criticalPercentage", w["criticalPercentage"],
+            DEFAULT_CONFIG["warnings"]["criticalPercentage"],
+        )
+        if w["warningPercentage"] >= w["criticalPercentage"]:
+            log.error(
+                "config: warnings.warningPercentage (%.2f) must be less than criticalPercentage (%.2f) "
+                "— using defaults",
+                w["warningPercentage"], w["criticalPercentage"],
+            )
+            w["warningPercentage"] = DEFAULT_CONFIG["warnings"]["warningPercentage"]
+            w["criticalPercentage"] = DEFAULT_CONFIG["warnings"]["criticalPercentage"]
+    except (KeyError, TypeError):
+        pass
+
+    for name, tier in result.get("poll", {}).get("thresholds", {}).items():
+        try:
+            default_tier = DEFAULT_CONFIG["poll"]["thresholds"].get(name)
+            default_above = default_tier["above"] if default_tier else 0.0
+            tier["above"] = _check(f"poll.thresholds.{name}.above", tier["above"], default_above)
+        except (KeyError, TypeError):
+            pass
+        try:
+            v = int(tier["intervalSec"])
+            if v <= 0:
+                raise ValueError(v)
+            tier["intervalSec"] = v
+        except (KeyError, TypeError, ValueError):
+            default_tier = DEFAULT_CONFIG["poll"]["thresholds"].get(name)
+            default_interval = default_tier["intervalSec"] if default_tier else 300
+            log.error(
+                "config: poll.thresholds.%s.intervalSec must be a positive integer; got %r — using default %d",
+                name, tier.get("intervalSec"), default_interval,
+            )
+            tier["intervalSec"] = default_interval
+
+    try:
+        pr = result["suggestions"]["triggers"]["post_reset"]
+        pr["weeklyPercentageBelow"] = _check(
+            "suggestions.triggers.post_reset.weeklyPercentageBelow",
+            pr["weeklyPercentageBelow"],
+            DEFAULT_CONFIG["suggestions"]["triggers"]["post_reset"]["weeklyPercentageBelow"],
+        )
+    except (KeyError, TypeError):
+        pass
+
+    try:
+        tiers = result["suggestions"]["triggers"]["low_utilization_eow"]["tiers"]
+        default_tiers = DEFAULT_CONFIG["suggestions"]["triggers"]["low_utilization_eow"]["tiers"]
+        for i, tier in enumerate(tiers):
+            default_pct = default_tiers[i]["weeklyPercentageBelow"] if i < len(default_tiers) else 0.5
+            tier["weeklyPercentageBelow"] = _check(
+                f"suggestions.triggers.low_utilization_eow.tiers[{i}].weeklyPercentageBelow",
+                tier["weeklyPercentageBelow"],
+                default_pct,
+            )
+    except (KeyError, TypeError):
+        pass
+
+    return result
+
+
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         try:
             user = json.loads(CONFIG_PATH.read_text())
             merged = _deep_merge(DEFAULT_CONFIG, user)
-            return merged
+            return _validate_config(merged)
         except Exception as exc:
             log.warning("Could not load config.json (%s), using defaults", exc)
-    return DEFAULT_CONFIG
+    return copy.deepcopy(DEFAULT_CONFIG)
 
 
 def _build_poll_thresholds(config: dict) -> list[tuple[float, int]]:
@@ -115,9 +193,12 @@ def _build_poll_thresholds(config: dict) -> list[tuple[float, int]]:
     try:
         pairs = [(v["above"], v["intervalSec"]) for v in raw.values()]
     except (KeyError, TypeError):
-        log.warning("Invalid poll thresholds in config.json; using defaults")
-        return list(DEFAULT_THRESHOLDS)
-    return sorted(pairs, reverse=True) if pairs else list(DEFAULT_THRESHOLDS)
+        pairs = []
+    if not pairs:
+        log.warning("Invalid or empty poll thresholds in config.json; using defaults")
+        raw = DEFAULT_CONFIG["poll"]["thresholds"]
+        pairs = [(v["above"], v["intervalSec"]) for v in raw.values()]
+    return sorted(pairs, reverse=True)
 
 
 # ── App state ─────────────────────────────────────────────────────────────────
@@ -127,34 +208,9 @@ _poller: Optional[UsagePoller] = None
 _poller_task: Optional[asyncio.Task] = None
 _watcher = None
 
-# Prior-snapshot tracking for post_reset trigger detection.
-# _prev_latest holds (weekly_pct, recorded_at) from the most recent poll so
-# that the NEXT poll can detect a significant drop.
-_prior_weekly_pct: Optional[float] = None
-_prior_recorded_at: Optional[str] = None
-_prev_latest: Optional[tuple[float, str]] = None  # staging buffer
-
 # Suggestions — loaded once at startup, available for all /suggestions requests.
 _all_suggestions: list[dict] = []
 _suggestions_yaml_error: Optional[str] = None  # surfaced in GET /suggestions
-
-
-def _on_poller_update(snapshot) -> None:
-    """Callback fired by UsagePoller after each successful poll.
-
-    Advances the staging buffer so /suggestions can compare the current reading
-    against the previous one for post_reset detection.
-    """
-    global _prior_weekly_pct, _prior_recorded_at, _prev_latest
-    # Both reads (_prior_*) and writes (_prev_latest) happen on the asyncio event
-    # loop — the poller's callback runs inside its async task, and get_suggestions()
-    # runs on the same loop — so no lock is needed. If the poller moves to a thread,
-    # protect these globals with asyncio.Lock.
-    # Move the previously staged reading into "prior" (visible to trigger eval).
-    if _prev_latest is not None:
-        _prior_weekly_pct, _prior_recorded_at = _prev_latest
-    # Stage the just-received reading for the next iteration.
-    _prev_latest = (snapshot.weekly_pct, snapshot.recorded_at)
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -219,7 +275,6 @@ async def lifespan(app: FastAPI):
     _poller = UsagePoller(
         thresholds=thresholds,
         working_hours=_config.get("workingHours"),
-        on_update=_on_poller_update,
     )
     _poller_task = asyncio.create_task(_poller.run())
 
@@ -530,8 +585,6 @@ def get_suggestions():
     active_triggers = evaluate_triggers(
         weekly_pct=weekly_pct,
         weekly_resets=weekly_resets,
-        prior_weekly_pct=_prior_weekly_pct,
-        prior_recorded_at=_prior_recorded_at,
         config=_config,
     )
     trigger_context = build_trigger_context(weekly_pct, weekly_resets, active_triggers)
