@@ -34,8 +34,8 @@
 #                       always              — eligible any time during working hours
 #                       low_utilization_eow — eligible when weekly usage is below
 #                                             50 % with ≤ 48 hours to the reset
-#                       post_reset          — eligible for ~4 hours after a weekly
-#                                             quota reset is detected
+#                       post_reset          — eligible when weekly utilization is
+#                                             below the post_reset.weeklyPercentageBelow threshold
 # show_every_n_days   Minimum days between showings (integer ≥ 1).
 # actions             Ordered list. First item is the primary action button.
 #                       copy_prompt   — copies the resolved prompt to clipboard

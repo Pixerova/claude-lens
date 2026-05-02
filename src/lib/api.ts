@@ -108,10 +108,11 @@ export interface OnboardingStatus {
 }
 
 export interface AppConfig {
-  warnings: {
-    warningPercentage: number;   // integer, e.g. 80
-    criticalPercentage: number;  // integer, e.g. 90
+  warnings?: {
+    warningPercentage: number;   // decimal fraction, e.g. 0.80
+    criticalPercentage: number;  // decimal fraction, e.g. 0.90
   };
+  [key: string]: unknown;
 }
 
 export interface SuggestionsResponse {

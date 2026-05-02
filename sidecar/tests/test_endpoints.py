@@ -177,8 +177,8 @@ async def test_config_warnings_block_present(isolated_db):
         resp = await client.get("/config")
     data = resp.json()
     assert "warnings" in data
-    assert "warningPercentage" in data["warnings"]
-    assert "criticalPercentage" in data["warnings"]
+    assert data["warnings"]["warningPercentage"] == pytest.approx(0.80)
+    assert data["warnings"]["criticalPercentage"] == pytest.approx(0.90)
 
 
 async def test_config_excludes_pricing(isolated_db):

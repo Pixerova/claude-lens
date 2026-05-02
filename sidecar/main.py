@@ -62,7 +62,7 @@ DEFAULT_CONFIG = {
             "minimal":  {"above": 0.00, "intervalSec": 3600},
         }
     },
-    "warnings": {"warningPercentage": 80, "criticalPercentage": 90},
+    "warnings": {"warningPercentage": 0.80, "criticalPercentage": 0.90},
     "suggestions": {
         "enabled": True,
         "maxVisible": 5,

@@ -127,6 +127,7 @@ def compute_interval(
     for threshold, interval in thresholds:
         if utilisation >= threshold:
             return interval
+    # _build_poll_thresholds always produces a non-empty list; 300 is a last-resort fallback.
     return thresholds[-1][1] if thresholds else 300
 
 
