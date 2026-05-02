@@ -92,12 +92,75 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def _validate_config(config: dict) -> dict:
+    """Check all fraction fields are in [0, 1]; log error and substitute default for any that aren't."""
+    import copy
+    result = copy.deepcopy(config)
+
+    def _check(path: str, value, default: float) -> float:
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            log.error("config: %s must be a number in [0, 1]; got %r — using default %.2f", path, value, default)
+            return default
+        if not (0.0 <= v <= 1.0):
+            log.error("config: %s out of range [0, 1]; got %r — using default %.2f", path, v, default)
+            return default
+        return v
+
+    try:
+        w = result["warnings"]
+        w["warningPercentage"] = _check(
+            "warnings.warningPercentage", w["warningPercentage"],
+            DEFAULT_CONFIG["warnings"]["warningPercentage"],
+        )
+        w["criticalPercentage"] = _check(
+            "warnings.criticalPercentage", w["criticalPercentage"],
+            DEFAULT_CONFIG["warnings"]["criticalPercentage"],
+        )
+    except (KeyError, TypeError):
+        pass
+
+    for name, tier in result.get("poll", {}).get("thresholds", {}).items():
+        try:
+            default_tier = DEFAULT_CONFIG["poll"]["thresholds"].get(name)
+            default_above = default_tier["above"] if default_tier else 0.0
+            tier["above"] = _check(f"poll.thresholds.{name}.above", tier["above"], default_above)
+        except (KeyError, TypeError):
+            pass
+
+    try:
+        pr = result["suggestions"]["triggers"]["post_reset"]
+        pr["weeklyPercentageBelow"] = _check(
+            "suggestions.triggers.post_reset.weeklyPercentageBelow",
+            pr["weeklyPercentageBelow"],
+            DEFAULT_CONFIG["suggestions"]["triggers"]["post_reset"]["weeklyPercentageBelow"],
+        )
+    except (KeyError, TypeError):
+        pass
+
+    try:
+        tiers = result["suggestions"]["triggers"]["low_utilization_eow"]["tiers"]
+        default_tiers = DEFAULT_CONFIG["suggestions"]["triggers"]["low_utilization_eow"]["tiers"]
+        for i, tier in enumerate(tiers):
+            default_pct = default_tiers[i]["weeklyPercentageBelow"] if i < len(default_tiers) else 0.5
+            tier["weeklyPercentageBelow"] = _check(
+                f"suggestions.triggers.low_utilization_eow.tiers[{i}].weeklyPercentageBelow",
+                tier["weeklyPercentageBelow"],
+                default_pct,
+            )
+    except (KeyError, TypeError):
+        pass
+
+    return result
+
+
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         try:
             user = json.loads(CONFIG_PATH.read_text())
             merged = _deep_merge(DEFAULT_CONFIG, user)
-            return merged
+            return _validate_config(merged)
         except Exception as exc:
             log.warning("Could not load config.json (%s), using defaults", exc)
     return DEFAULT_CONFIG
