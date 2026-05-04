@@ -59,7 +59,10 @@ jobs:
           workspaces: src-tauri
 
       - name: Create sidecar stub
-        run: mkdir -p src-tauri/binaries && touch src-tauri/binaries/claude-lens-sidecar-aarch64-apple-darwin
+        run: |
+          triple=$(rustc -vV | awk '/host:/ { print $2 }')
+          mkdir -p src-tauri/binaries
+          touch "src-tauri/binaries/claude-lens-sidecar-${triple}"
 
       - name: Cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml
