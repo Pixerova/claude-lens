@@ -58,5 +58,8 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Create sidecar stub
+        run: mkdir -p src-tauri/binaries && touch src-tauri/binaries/claude-lens-sidecar-aarch64-apple-darwin
+
       - name: Cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml
