@@ -428,7 +428,7 @@ export default function App() {
 
         {/* ── Suggestion tray ──────────────────────────────────────────────── */}
         {!usageError && expanded && showTray && usage && (
-          <SuggestionTray suggestions={suggestions} usage={usage} onBack={() => setShowTray(false)} />
+          <SuggestionTray suggestions={suggestions} usage={usage} onBack={() => setShowTray(false)} warnAt={warnAt} critAt={critAt} />
         )}
 
         {/* ── Expanded view ────────────────────────────────────────────────── */}

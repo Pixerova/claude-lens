@@ -7,9 +7,11 @@ interface SuggestionTrayProps {
   suggestions: Suggestion[];
   usage: UsageCurrent;
   onBack: () => void;
+  warnAt: number;  // 0–1 fraction, e.g. 0.80
+  critAt: number;  // 0–1 fraction, e.g. 0.90
 }
 
-export const SuggestionTray: React.FC<SuggestionTrayProps> = ({ suggestions, usage, onBack }) => {
+export const SuggestionTray: React.FC<SuggestionTrayProps> = ({ suggestions, usage, onBack, warnAt, critAt }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
@@ -38,8 +40,8 @@ export const SuggestionTray: React.FC<SuggestionTrayProps> = ({ suggestions, usa
     <div className="flex flex-col" style={{ flex: 1, minHeight: 0 }}>
       {/* Stat tiles — same as expanded view */}
       <div className="grid grid-cols-2 gap-[3px] p-[5px] pb-[3px]">
-        <UsageTile type="session" pct={usage.sessionPct} resetsAt={usage.sessionResetsAt} />
-        <UsageTile type="weekly"  pct={usage.weeklyPct}  resetsAt={usage.weeklyResetsAt} style={{ animationDelay: "0.3s" }} />
+        <UsageTile type="session" pct={usage.sessionPct} resetsAt={usage.sessionResetsAt} warnAt={warnAt} critAt={critAt} />
+        <UsageTile type="weekly"  pct={usage.weeklyPct}  resetsAt={usage.weeklyResetsAt} warnAt={warnAt} critAt={critAt} style={{ animationDelay: "0.3s" }} />
       </div>
 
       {/* Tray header */}
