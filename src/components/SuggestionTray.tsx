@@ -7,8 +7,8 @@ interface SuggestionTrayProps {
   suggestions: Suggestion[];
   usage: UsageCurrent;
   onBack: () => void;
-  warnAt: number;
-  critAt: number;
+  warnAt: number;  // 0–1 fraction, e.g. 0.80
+  critAt: number;  // 0–1 fraction, e.g. 0.90
 }
 
 export const SuggestionTray: React.FC<SuggestionTrayProps> = ({ suggestions, usage, onBack, warnAt, critAt }) => {

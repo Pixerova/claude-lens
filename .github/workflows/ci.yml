@@ -17,7 +17,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: sidecar/requirements-dev.txt
+          cache-dependency-path: |
+            sidecar/requirements.txt
+            sidecar/requirements-dev.txt
 
       - name: Install dependencies
         run: pip install -r sidecar/requirements-dev.txt
@@ -41,7 +43,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test
+        run: npm run test
 
       - name: Build
         run: npm run build
